@@ -28,13 +28,13 @@ window.PureBridge = {
   saveSettings: function (settings) { return this.call('saveSettings', JSON.stringify(settings)); },
   getSettings: function () { return this.call('getSettings'); },
 
-  // 原生 → JS 回调（Java 侧通过 evaluateJavascript 调用这些全局函数）
-  _progressCb: null, _doneCb: null,
+  // 原生回调入口（Java 调 window.onPureProgress / onPureTestDone / onPureSubReady，传 JSON 字符串）
+  _progressCb: null, _doneCb: null, _subReadyCb: null,
   onProgress: function (cb) { this._progressCb = cb; },
-  onDone: function (cb) { this._doneCb = cb; }
+  onDone: function (cb) { this._doneCb = cb; },
+  onSubReady: function (cb) { this._subReadyCb = cb; }
 };
 
-// 原生回调入口（Java 调 window.onPureProgress(json) / window.onPureTestDone(json)）
 window.onPureProgress = function (json) {
   try { PureBridge._progressCb && PureBridge._progressCb(JSON.parse(json)); }
   catch (e) { __dbg('onPureProgress: ' + e.message, true); }
@@ -42,4 +42,8 @@ window.onPureProgress = function (json) {
 window.onPureTestDone = function (json) {
   try { PureBridge._doneCb && PureBridge._doneCb(JSON.parse(json)); }
   catch (e) { __dbg('onPureTestDone: ' + e.message, true); }
+};
+window.onPureSubReady = function (json) {
+  try { PureBridge._subReadyCb && PureBridge._subReadyCb(JSON.parse(json)); }
+  catch (e) { __dbg('onPureSubReady: ' + e.message, true); }
 };

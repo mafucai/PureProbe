@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
         web.loadUrl("file:///android_asset/index.html");
     }
 
-    /** JS 回调：进度 / 完成（在 JS 侧由 window.onPureProgress / onPureTestDone 接收） */
+    /** JS 回调：进度 / 完成 / 订阅就绪 / 订阅失败（JS 侧 window.onPure* 接收） */
     private void jsEval(final String expr) {
         runOnUiThread(new Runnable() {
             public void run() {
@@ -49,6 +49,9 @@ public class MainActivity extends Activity {
 
     void onProgressJson(final String json) { jsEval("onPureProgress(" + json + ")"); }
     void onDoneJson(final String json) { jsEval("onPureTestDone(" + json + ")"); }
+
+    /** 重活完成回调：onPureSubReady({ok,count,nodes,error}) */
+    void onSubReadyJson(final String json) { jsEval("onPureSubReady(" + json + ")"); }
 
     @Override
     protected void onDestroy() {
@@ -66,9 +69,15 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public String addSubscription(String url) {
-            String urlSafe = SubStore.maskUrl(url);
-            return store.addSubscription(url, engine);
+        public String addSubscription(final String url) {
+            // 重活（内核启动+订阅下载最长20s+）扔后台，桥立即返回，防 JS 桥线程串行阻塞所有按钮
+            new Thread(new Runnable() {
+                public void run() {
+                    String result = store.addSubscription(url, engine);
+                    onSubReadyJson(result);
+                }
+            }, "pp-addsub").start();
+            return "{\"ok\":true,\"async\":true}";
         }
 
         @JavascriptInterface
@@ -77,8 +86,14 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public String refreshSubscription(String id) {
-            return store.refreshSubscription(id, engine);
+        public String refreshSubscription(final String id) {
+            new Thread(new Runnable() {
+                public void run() {
+                    String result = store.refreshSubscription(id, engine);
+                    onSubReadyJson(result);
+                }
+            }, "pp-refsub").start();
+            return "{\"ok\":true,\"async\":true}";
         }
 
         @JavascriptInterface

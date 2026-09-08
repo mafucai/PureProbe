@@ -20,11 +20,20 @@
     },
     addSubscription: function (url) {
       var subs = window.PureState ? window.PureState.subs : [];
-      if (!/^https?:\/\//.test(url)) return JSON.stringify({ ok: false, error: 'URL 格式不对' });
-      if (subs.some(function (s) { return s.url === url; })) return JSON.stringify({ ok: false, error: '订阅已存在' });
-      var sub = { id: 'sub-' + Date.now(), url: url, name: '模拟订阅', nodeCount: SIM_NODES.length, addedAt: Date.now() };
-      subs.push(sub);
-      return JSON.stringify({ ok: true, sub: sub, nodes: SIM_NODES });
+      var resp;
+      if (!/^https?:\/\//.test(url)) {
+        resp = { ok: false, error: 'URL 格式不对' };
+      } else if (subs.some(function (s) { return s.url === url; })) {
+        // 与真机一致：已存在 = 自动重拉（模拟直接成功）
+        resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      } else {
+        var sub = { id: 'sub-' + Date.now(), url: url, name: '模拟订阅', nodeCount: SIM_NODES.length, addedAt: Date.now() };
+        subs.push(sub);
+        resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      }
+      // 与真机异步路径一致：走 onPureSubReady 回调
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      return JSON.stringify({ ok: true, async: true });
     },
     removeSubscription: function (id) {
       var subs = window.PureState ? window.PureState.subs : [];
@@ -32,7 +41,9 @@
       return JSON.stringify({ ok: true });
     },
     refreshSubscription: function (id) {
-      return JSON.stringify({ ok: true, nodes: SIM_NODES });
+      var resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      return JSON.stringify({ ok: true, async: true });
     },
     getNodes: function () {
       return JSON.stringify(window.PureState ? window.PureState.nodes : []);

@@ -457,11 +457,20 @@ window.PureState = {
     },
     addSubscription: function (url) {
       var subs = window.PureState ? window.PureState.subs : [];
-      if (!/^https?:\/\//.test(url)) return JSON.stringify({ ok: false, error: 'URL 格式不对' });
-      if (subs.some(function (s) { return s.url === url; })) return JSON.stringify({ ok: false, error: '订阅已存在' });
-      var sub = { id: 'sub-' + Date.now(), url: url, name: '模拟订阅', nodeCount: SIM_NODES.length, addedAt: Date.now() };
-      subs.push(sub);
-      return JSON.stringify({ ok: true, sub: sub, nodes: SIM_NODES });
+      var resp;
+      if (!/^https?:\/\//.test(url)) {
+        resp = { ok: false, error: 'URL 格式不对' };
+      } else if (subs.some(function (s) { return s.url === url; })) {
+        // 与真机一致：已存在 = 自动重拉（模拟直接成功）
+        resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      } else {
+        var sub = { id: 'sub-' + Date.now(), url: url, name: '模拟订阅', nodeCount: SIM_NODES.length, addedAt: Date.now() };
+        subs.push(sub);
+        resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      }
+      // 与真机异步路径一致：走 onPureSubReady 回调
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      return JSON.stringify({ ok: true, async: true });
     },
     removeSubscription: function (id) {
       var subs = window.PureState ? window.PureState.subs : [];
@@ -469,7 +478,9 @@ window.PureState = {
       return JSON.stringify({ ok: true });
     },
     refreshSubscription: function (id) {
-      return JSON.stringify({ ok: true, nodes: SIM_NODES });
+      var resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      return JSON.stringify({ ok: true, async: true });
     },
     getNodes: function () {
       return JSON.stringify(window.PureState ? window.PureState.nodes : []);
@@ -552,13 +563,13 @@ window.PureBridge = {
   saveSettings: function (settings) { return this.call('saveSettings', JSON.stringify(settings)); },
   getSettings: function () { return this.call('getSettings'); },
 
-  // 原生 → JS 回调（Java 侧通过 evaluateJavascript 调用这些全局函数）
-  _progressCb: null, _doneCb: null,
+  // 原生回调入口（Java 调 window.onPureProgress / onPureTestDone / onPureSubReady，传 JSON 字符串）
+  _progressCb: null, _doneCb: null, _subReadyCb: null,
   onProgress: function (cb) { this._progressCb = cb; },
-  onDone: function (cb) { this._doneCb = cb; }
+  onDone: function (cb) { this._doneCb = cb; },
+  onSubReady: function (cb) { this._subReadyCb = cb; }
 };
 
-// 原生回调入口（Java 调 window.onPureProgress(json) / window.onPureTestDone(json)）
 window.onPureProgress = function (json) {
   try { PureBridge._progressCb && PureBridge._progressCb(JSON.parse(json)); }
   catch (e) { __dbg('onPureProgress: ' + e.message, true); }
@@ -566,6 +577,10 @@ window.onPureProgress = function (json) {
 window.onPureTestDone = function (json) {
   try { PureBridge._doneCb && PureBridge._doneCb(JSON.parse(json)); }
   catch (e) { __dbg('onPureTestDone: ' + e.message, true); }
+};
+window.onPureSubReady = function (json) {
+  try { PureBridge._subReadyCb && PureBridge._subReadyCb(JSON.parse(json)); }
+  catch (e) { __dbg('onPureSubReady: ' + e.message, true); }
 };
 
 /* PureProbe render.js — 全部 DOM 渲染。禁止未转义 innerHTML（用 esc()） */
@@ -593,6 +608,7 @@ window.onPureTestDone = function (json) {
         return '<div class="sub-item" data-id="' + esc(s.id) + '">' +
           '<div class="sub-main"><b>' + esc(s.name) + '</b>' +
           '<span class="hint"> ' + (s.nodeCount || '?') + ' 节点</span></div>' +
+          '<button class="btn tiny btn-ref-sub" data-id="' + esc(s.id) + '">刷新</button>' +
           '<button class="btn tiny btn-del-sub" data-id="' + esc(s.id) + '">删除</button>' +
           '</div>';
       }).join('');
@@ -694,7 +710,11 @@ window.onPureTestDone = function (json) {
 
     start: function () {
       if (PureState.testing) return;
-      if (!PureState.nodes.length) { log('无节点，请先添加订阅'); return; }
+      if (!PureState.nodes.length) {
+        PureRender.renderAll();
+        PureTest.log('⚠️ 没有节点：先在上方添加订阅（需网络可直连机场）');
+        return;
+      }
       var names = freshNodes(PureState.settings.incremental, PureState.settings.cacheHours);
       if (!names.length) { log('增量模式下无待测节点（可清缓存或关闭增量）'); return; }
       PureState.testing = true;
@@ -759,17 +779,31 @@ window.onPureTestDone = function (json) {
     el('btn-add-sub').addEventListener('click', function () {
       var url = el('sub-url-input').value.trim();
       if (!url) { msg('sub-msg', '请先粘贴订阅链接', false); return; }
-      PureBridge.addSubscription(url).then(function (r) {
-        if (r.ok) {
-          PureState.nodes = r.nodes || PureState.nodes;
-          PureState.save();
-          PureRender.renderAll();
-          el('sub-url-input').value = '';
-          PureTest.log('订阅已添加，解析到 ' + (r.nodes ? r.nodes.length : 0) + ' 个节点');
-        } else {
-          msg('sub-msg', r.error || '添加失败', false);
-        }
-      }).catch(function (e) { msg('sub-msg', '桥接失败: ' + e.message, false); });
+      setSubBusy(true, '拉取订阅中…（最长 20 秒）');
+      msg('sub-msg', '正在启动内核并下载订阅…', true);
+      PureBridge.addSubscription(url); // 异步：结果走 onPureSubReady 回调
+    });
+
+    function setSubBusy(busy, text) {
+      var btn = el('btn-add-sub');
+      btn.disabled = busy;
+      btn.textContent = busy ? (text || '处理中…') : '添加订阅';
+    }
+
+    // 桥接异步结果：订阅就绪/失败（真机后台线程回调；模拟模式由 bridge-sim 直接 resolve）
+    PureBridge.onSubReady(function (r) {
+      setSubBusy(false);
+      if (r.ok) {
+        PureState.nodes = r.nodes || PureState.nodes;
+        PureState.save();
+        PureRender.renderAll();
+        el('sub-url-input').value = '';
+        msg('sub-msg', '订阅就绪，共 ' + (r.count != null ? r.count : PureState.nodes.length) + ' 个节点', true);
+        PureTest.log('订阅就绪，共 ' + (r.count != null ? r.count : PureState.nodes.length) + ' 个节点');
+      } else {
+        msg('sub-msg', r.error || '订阅处理失败', false);
+        PureTest.log('订阅失败: ' + (r.error || ''));
+      }
     });
 
     el('btn-refresh-sub').addEventListener('click', function () {
@@ -781,17 +815,25 @@ window.onPureTestDone = function (json) {
     });
 
     el('sub-list').addEventListener('click', function (ev) {
-      var btn = ev.target.closest('.btn-del-sub');
-      if (!btn) return;
-      var id = btn.dataset.id;
-      PureBridge.removeSubscription(id).then(function (r) {
-        if (r.ok) {
-          PureState.subs = PureState.subs.filter(function (s) { return s.id !== id; });
-          PureState.save();
-          PureRender.renderAll();
-          PureTest.log('订阅已删除');
-        }
-      });
+      var del = ev.target.closest('.btn-del-sub');
+      if (del) {
+        var id = del.dataset.id;
+        PureBridge.removeSubscription(id).then(function (r) {
+          if (r.ok) {
+            PureState.subs = PureState.subs.filter(function (s) { return s.id !== id; });
+            PureState.save();
+            PureRender.renderAll();
+            PureTest.log('订阅已删除');
+          }
+        });
+        return;
+      }
+      var ref = ev.target.closest('.btn-ref-sub');
+      if (ref) {
+        var rid = ref.dataset.id;
+        ref.textContent = '拉取中…';
+        PureBridge.refreshSubscription(rid); // 异步：结果走 onPureSubReady
+      }
     });
 
     // 体检
@@ -867,6 +909,11 @@ window.onPureTestDone = function (json) {
       if (nodes && nodes.length) { PureState.nodes = nodes; }
       PureRender.renderAll();
       PureTest.log('PureProbe 就绪' + (window.AndroidPure && !window.AndroidPure.__sim ? '（真机模式）' : '（浏览器模拟模式）'));
+      // 有订阅但没节点（历史版本存了订阅没拉到）→ 自动补拉（真机侧已异步化，不阻塞桥）
+      if (PureState.subs.length && !PureState.nodes.length) {
+        PureTest.log('检测到有订阅但无节点，自动重新拉取…');
+        PureBridge.refreshSubscription(PureState.subs[PureState.subs.length - 1].id);
+      }
     }).catch(function (e) {
       PureRender.renderAll();
       __dbg('初始化桥接失败: ' + e.message, true);
