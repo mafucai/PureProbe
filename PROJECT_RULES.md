@@ -1,0 +1,34 @@
+# PureProbe 节点体检 — 项目规则
+
+> 定位：给主人个人的 Android 工具 App。输入机场订阅链接，自动逐节点体检（死活 → 污染 → 出口 IP 纯净度），产出"干净节点"排行榜和可导出的排除名单。
+> 仓库：github.com/mafucai/PureProbe（SSH）· 编译：仅 GitHub Actions 云端，本地零 Android SDK。
+
+## 铁律
+
+1. **设计已确认（2026-09-08）**：漏斗四层架构 + mihomo 内核 + WebView UI。改设计必须先汇报。
+2. **改前备份**：任何文件修改前 `cp x x.bak-日期`；>500 行文件分块读写。
+3. **推送纪律**：本地验证全绿 → 给主人看 → 确认后才 push 触发 Actions。不经 2-3 步直接 push 视为违规。
+4. **编译前过 Skills 检查门禁**（webapp-testing / dom-static-check / debugger 按改动命中），全绿才编译。
+5. **流量红线**：默认并发 ≤8；每节点每轮探活请求 ≤3 个小请求（204 级别）；测速默认关闭；IP 纯净度查询按出口 IP 去重 + 24h 缓存。禁止对机场大流量轰炸（防风控封号——这是本项目存在的前提）。
+6. **订阅链接只存本机**（App 私有目录），禁止写日志、禁止上传任何服务器、禁止打进备份提交。
+7. **GPL 合规**：mihomo 是 GPLv3，打包其二进制必须在仓库显著位置放 LICENSE-attribution 和源码链接；本项目自身代码不复制 GPL 项目源码，只借鉴思路。
+8. **权限最小化**：只用 INTERNET（+未来通知按需）。不要 VPN 权限（mihomo 只开本地 127.0.0.1 端口，不做全局代理）。
+9. 每次 Web/JS 改动跑 `python3 scripts/preflight.py`，全绿才算完成。
+10. 失败必沉淀：构建/功能失败按「失败 → 根因 → 应对」三段式记入本文档末尾表格。
+11. **图标已定**：蓝紫渐变圆角方 + 白盾 + 渐变对勾（呼应 UI 主色）。来源 `scripts/gen_icon.py`，改图标跑脚本重生成 + show_image 给主人确认，禁止手工改 PNG。5 密度 mipmap 已生成。
+
+## 模块边界
+
+| 目录 | 职责 | 不许做 |
+|---|---|---|
+| `app/src/main/java/.../MihomoManager` | 内核生命周期（启动/停止/健康检查） | 不做测试逻辑 |
+| `.../TestEngine` | 漏斗测试调度 + 结果判定 | 不碰 UI、不直接管内核进程 |
+| `.../SubStore` | 订阅增删 + 结果缓存持久化 | 不做网络请求 |
+| `app/src/main/assets/js/` | 全部 UI（WebView + bridge-sim） | 不写死任何节点/订阅数据 |
+| `app/src/main/jniLibs/` | 只放 mihomo 官方 release 二进制改名 libmihomo.so | 不自行编译内核 |
+
+## 失败经验沉淀表
+
+| 失败 | 根因 | 应对 |
+|---|---|---|
+| （待填） | | |

@@ -1,0 +1,85 @@
+name: PureProbe APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Download mihomo kernel (android-arm64)
+        run: |
+          set -euo pipefail
+          VER="v1.19.30"
+          URL="https://github.com/MetaCubeX/mihomo/releases/download/${VER}/mihomo-android-arm64-${VER}.gz"
+          curl -fL --retry 3 -o mihomo.gz "${URL}"
+          gunzip -f mihomo.gz
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          mv mihomo app/src/main/jniLibs/arm64-v8a/libmihomo.so
+          chmod +x app/src/main/jniLibs/arm64-v8a/libmihomo.so
+          test -s app/src/main/jniLibs/arm64-v8a/libmihomo.so
+          echo "mihomo ${VER} 打包完成"
+      - name: Build release APK
+        run: ./gradlew --no-daemon --max-workers=2 :app:assembleRelease
+      - name: Sign release APK
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS_NAME: ${{ secrets.KEYSTORE_ALIAS }}
+        run: |
+          set -euo pipefail
+          SDK_BUILD_TOOLS="${ANDROID_HOME}/build-tools/35.0.0"
+          echo -n "${KEYSTORE_B64}" | base64 -d > release-fixed.jks
+          test -s release-fixed.jks
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "${UNSIGNED}"
+          SIGNED="app/build/outputs/apk/release/pureprobe-release.apk"
+          "${SDK_BUILD_TOOLS}/apksigner" sign \
+            --ks release-fixed.jks --ks-pass "pass:${KEYSTORE_PASS}" \
+            --ks-key-alias "${KEYSTORE_ALIAS_NAME}" \
+            --key-pass "pass:${KEYSTORE_PASS}" --out "${SIGNED}" "${UNSIGNED}"
+          "${SDK_BUILD_TOOLS}/apksigner" verify "${SIGNED}"
+          "${SDK_BUILD_TOOLS}/apksigner" verify --print-certs "${SIGNED}" | head -4
+          rm -f release-fixed.jks
+      - name: Verify APK structure
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/pureprobe-release.apk"
+          unzip -tq "${APK}"
+          stat -c '%s bytes %n' "${APK}"
+          sha256sum "${APK}"
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pureprobe-apk
+          path: app/build/outputs/apk/release/pureprobe-release.apk
+          if-no-files-found: error
+      - name: Publish GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="build-${GITHUB_RUN_NUMBER}"
+          gh release create "${TAG}" \
+            app/build/outputs/apk/release/pureprobe-release.apk \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "PureProbe ${TAG}" \
+            --notes "云端构建 APK（含 mihomo 内核 GPLv3，源码见 github.com/MetaCubeX/mihomo）"

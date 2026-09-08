@@ -1,0 +1,9 @@
+# 备份与临时
+*.bak-*
+*.bak
+preview/httpd.log
+build/
+.gradle/
+local.properties
+.idea/
+*.iml

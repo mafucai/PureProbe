@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PureProbe 节点体检</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<!-- 调试面板：业务JS崩溃也能显示错误（治理铁律） -->
+<div id="debug-panel" style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1a2e;color:#0f0;font:11px/1.4 monospace;padding:4px 8px;display:none;max-height:35vh;overflow:auto;border-top:2px solid #0f0;">
+  <div id="debug-panel-log">[debug]</div>
+</div>
+<script>
+(function(){
+  var panel = document.getElementById('debug-panel');
+  var log = document.getElementById('debug-panel-log');
+  var count = 0;
+  window.__dbg = function(msg, isErr){
+    panel.style.display = 'block';
+    count++;
+    var line = document.createElement('div');
+    line.textContent = (isErr ? '\u2717 ' : '\u00b7 ') + String(msg).slice(0, 300);
+    if (isErr) line.style.color = '#f55';
+    log.appendChild(line);
+    if (count > 50) { log.removeChild(log.firstChild); }
+    panel.scrollTop = panel.scrollHeight;
+  };
+  window.onerror = function(msg, src, line, col){
+    window.__dbg('JS错误: ' + msg + ' @' + (src||'').split('/').pop() + ':' + line + ':' + col, true);
+  };
+  window.addEventListener('unhandledrejection', function(e){
+    window.__dbg('Promise拒绝: ' + (e.reason && e.reason.message || e.reason), true);
+  });
+  var toggle = 0;
+  panel.addEventListener('click', function(){ if (++toggle % 2 === 0) panel.style.display = 'none'; });
+})();
+</script>
+
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-logo">🛡️</div>
+    <div>
+      <div class="topbar-title">Pure<em>Probe</em></div>
+      <div class="topbar-sub">机场节点纯净度体检 · PureProbe</div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">总览</button>
+    <button class="tab" data-tab="nodes">节点</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </nav>
+
+  <main id="tab-overview" class="tab-panel active">
+    <section class="card">
+      <h2>订阅</h2>
+      <div id="sub-list"></div>
+      <div class="row">
+        <input type="url" id="sub-url-input" placeholder="粘贴机场订阅链接 (https://...)" autocomplete="off">
+      </div>
+      <div class="row">
+        <button id="btn-add-sub" class="btn primary">添加订阅</button>
+        <button id="btn-refresh-sub" class="btn">刷新列表</button>
+      </div>
+      <div id="sub-msg" class="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>一键体检</h2>
+      <div class="stat-grid">
+        <div class="stat"><span id="stat-total">-</span><label>节点总数</label></div>
+        <div class="stat"><span id="stat-tested">-</span><label>已测</label></div>
+        <div class="stat"><span id="stat-clean">-</span><label>干净</label></div>
+        <div class="stat"><span id="stat-bad">-</span><label>异常</label></div>
+      </div>
+      <div id="progress-wrap" class="progress-wrap hidden">
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+        <div id="progress-text" class="progress-text">待开始</div>
+      </div>
+      <div class="row">
+        <button id="btn-start" class="btn primary">▶ 开始体检</button>
+        <button id="btn-stop" class="btn danger hidden">■ 停止</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>排行榜 <span class="hint">(干净→污染→不通)</span></h2>
+      <div id="rank-list" class="rank-list"></div>
+    </section>
+  </main>
+
+  <main id="tab-nodes" class="tab-panel">
+    <section class="card">
+      <h2>全部节点 <span id="node-count" class="hint"></span></h2>
+      <div class="row">
+        <select id="filter-status">
+          <option value="all">全部状态</option>
+          <option value="clean">干净</option>
+          <option value="polluted">污染</option>
+          <option value="dead">不通</option>
+          <option value="risky">高风险</option>
+          <option value="unknown">未测</option>
+        </select>
+        <button id="btn-export" class="btn">导出干净节点</button>
+      </div>
+      <div id="node-list"></div>
+    </section>
+  </main>
+
+  <main id="tab-settings" class="tab-panel">
+    <section class="card">
+      <h2>测试设置</h2>
+      <label class="field">
+        <span>并发数 (1-16，默认 8)</span>
+        <input type="number" id="set-concurrency" min="1" max="16" value="8">
+      </label>
+      <label class="field">
+        <span>单请求超时（秒）</span>
+        <input type="number" id="set-timeout" min="2" max="15" value="5">
+      </label>
+      <label class="field">
+        <span>缓存有效期（小时）</span>
+        <input type="number" id="set-cache-hrs" min="1" max="168" value="24">
+      </label>
+      <label class="field checkbox">
+        <input type="checkbox" id="set-incremental" checked>
+        <span>增量模式（缓存内已测节点跳过）</span>
+      </label>
+      <div class="row">
+        <button id="btn-save-settings" class="btn primary">保存设置</button>
+        <button id="btn-clear-cache" class="btn danger">清除缓存</button>
+      </div>
+      <div id="set-msg" class="msg"></div>
+    </section>
+    <section class="card">
+      <h2>关于</h2>
+      <p class="hint">PureProbe v0.1.0 · mihomo 内核 (GPLv3)</p>
+      <p class="hint">测试流量极小：每节点每轮 ≤3 个 204 探活请求</p>
+      <p class="hint">订阅链接仅存本机，不上传任何服务器</p>
+    </section>
+    <section class="card">
+      <h2>日志</h2>
+      <div id="log-list" class="log-list"></div>
+    </section>
+  </main>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/bridge-sim.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/render.js"></script>
+<script src="js/test.js"></script>
+<script src="js/init.js"></script>
+</body>
+</html>

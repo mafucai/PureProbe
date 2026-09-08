@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PureProbe 节点体检</title>
+<style>
+/* PureProbe app.css — v2 视觉升级：玻璃拟态 + 渐变高光 + 精致细节 */
+:root {
+  --bg: #070b14;
+  --bg-glow-1: rgba(56, 130, 246, 0.13);
+  --bg-glow-2: rgba(139, 92, 246, 0.10);
+  --card: rgba(22, 28, 45, 0.72);
+  --card-solid: #161c2d;
+  --border: rgba(148, 163, 184, 0.14);
+  --border-bright: rgba(148, 163, 184, 0.30);
+  --text: #eef2f8;
+  --dim: #94a3b8;
+  --faint: #64748b;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --accent-grad: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, "PingFang SC", "HarmonyOS Sans", "Microsoft YaHei", sans-serif;
+  padding-bottom: 48px;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 80% 40% at 15% -5%, var(--bg-glow-1), transparent),
+    radial-gradient(ellipse 70% 45% at 90% 10%, var(--bg-glow-2), transparent);
+  background-attachment: fixed;
+}
+#app { max-width: 660px; margin: 0 auto; padding: 0 16px; }
+
+/* ===== 顶栏 ===== */
+.topbar {
+  padding: 26px 4px 14px;
+  display: flex; align-items: center; gap: 13px;
+}
+.topbar-logo {
+  width: 44px; height: 44px; border-radius: 13px;
+  background: var(--accent-grad);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+}
+.topbar-title { font-size: 21px; font-weight: 800; letter-spacing: 0.3px; }
+.topbar-title em {
+  font-style: normal;
+  background: var(--accent-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.topbar-sub { color: var(--dim); font-size: 12.5px; margin-top: 1px; }
+
+/* ===== Tabs ===== */
+.tabs {
+  display: flex; gap: 5px; margin: 14px 0 18px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 13px; padding: 4px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.tab {
+  flex: 1; padding: 10px 0; background: transparent; color: var(--dim);
+  border: none; border-radius: 10px; font-size: 14.5px; font-weight: 600;
+  cursor: pointer; transition: all 0.22s ease;
+}
+.tab.active {
+  color: #fff; background: var(--accent-grad);
+  box-shadow: 0 3px 14px rgba(99, 102, 241, 0.4);
+}
+
+.tab-panel { display: none; animation: fadeIn 0.28s ease; }
+.tab-panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px; margin-bottom: 16px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+.card h2 {
+  font-size: 15.5px; font-weight: 700; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card h2::before {
+  content: ""; width: 3.5px; height: 15px; border-radius: 2px;
+  background: var(--accent-grad); flex-shrink: 0;
+}
+.hint { color: var(--faint); font-size: 12px; font-weight: 400; }
+
+/* ===== 布局 ===== */
+.row { display: flex; gap: 9px; margin-top: 12px; }
+.row input[type=url], .row input[type=text] { flex: 1; }
+.msg { min-height: 18px; font-size: 13px; margin-top: 8px; }
+.msg.ok { color: var(--green); }
+.msg.err { color: var(--red); }
+.hidden { display: none !important; }
+
+/* ===== 控件 ===== */
+input[type=url], input[type=number], input[type=text], select {
+  background: rgba(7, 11, 20, 0.65); color: var(--text);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm); padding: 11px 13px; font-size: 14px; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+input:focus, select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+}
+input::placeholder { color: var(--faint); }
+select { appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  padding-right: 32px;
+}
+.field { display: block; margin-bottom: 13px; }
+.field > span { display: block; font-size: 12.5px; color: var(--dim); margin-bottom: 5px; }
+.field.checkbox { display: flex; align-items: center; gap: 9px; }
+.field.checkbox input { width: auto; accent-color: #6366f1; transform: scale(1.25); }
+.field.checkbox span { margin: 0; font-size: 14px; color: var(--text); }
+
+.btn {
+  background: rgba(148, 163, 184, 0.10); color: var(--text);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm); padding: 11px 18px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn:active { transform: scale(0.96); }
+.btn.primary {
+  background: var(--accent-grad); border: none; color: #fff;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.38);
+}
+.btn.danger { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+.btn.tiny { padding: 5px 12px; font-size: 12px; border-radius: 8px; }
+
+/* ===== 统计四宫格 ===== */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin: 4px 0 6px; }
+.stat {
+  background: rgba(7, 11, 20, 0.55); border: 1px solid var(--border);
+  border-radius: 12px; padding: 13px 4px 10px; text-align: center;
+  position: relative; overflow: hidden;
+}
+.stat::before {
+  content: ""; position: absolute; top: 0; left: 20%; right: 20%; height: 2px;
+  border-radius: 0 0 3px 3px; background: var(--accent-grad); opacity: 0.75;
+}
+.stat span { font-size: 23px; font-weight: 800; display: block; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat:last-child span { color: var(--red); }
+.stat:nth-child(3) span { color: var(--green); }
+.stat label { font-size: 10.5px; color: var(--faint); letter-spacing: 0.4px; }
+
+/* ===== 进度条 ===== */
+.progress-wrap { margin-top: 14px; }
+.progress-track {
+  background: rgba(7, 11, 20, 0.65); border: 1px solid var(--border);
+  border-radius: 99px; height: 12px; overflow: hidden;
+}
+.progress-bar {
+  background: var(--accent-grad);
+  height: 100%; width: 0; border-radius: 99px;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+.progress-bar::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.progress-text { font-size: 12.5px; color: var(--dim); margin-top: 7px; font-variant-numeric: tabular-nums; }
+
+/* ===== 订阅列表 ===== */
+.sub-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 2px; border-bottom: 1px solid var(--border);
+}
+.sub-item:last-child { border-bottom: none; }
+.sub-main b { font-size: 14px; }
+.sub-item .btn.tiny { background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; }
+
+/* ===== 节点行 ===== */
+.node-row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 13px; border: 1px solid var(--border);
+  border-radius: 13px; margin-bottom: 8px;
+  background: rgba(7, 11, 20, 0.5);
+  transition: border-color 0.2s;
+}
+.node-row .rank {
+  color: var(--purple); font-weight: 800; min-width: 26px; text-align: center;
+  font-size: 15px; font-variant-numeric: tabular-nums;
+}
+.node-main { flex: 1; min-width: 0; }
+.node-main b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-main .hint { font-size: 11.5px; margin-top: 1px; }
+.node-status {
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  padding: 4px 9px; border-radius: 99px;
+}
+.st-clean  { border-left: 3px solid var(--green); }
+.st-clean  .node-status { background: rgba(52, 211, 153, 0.13); color: var(--green); }
+.st-polluted { border-left: 3px solid var(--yellow); }
+.st-polluted .node-status { background: rgba(251, 191, 36, 0.12); color: var(--yellow); }
+.st-dead { border-left: 3px solid var(--red); opacity: 0.62; }
+.st-dead .node-status { background: rgba(248, 113, 113, 0.12); color: var(--red); }
+.st-risky { border-left: 3px solid var(--red); }
+.st-risky .node-status { background: rgba(248, 113, 113, 0.12); color: var(--red); }
+.st-unknown { border-left: 3px solid var(--border-bright); }
+.st-unknown .node-status { background: rgba(148, 163, 184, 0.10); color: var(--faint); }
+
+/* ===== 日志 ===== */
+.log-list {
+  max-height: 230px; overflow: auto;
+  background: rgba(7, 11, 20, 0.6); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 11px;
+  font: 11.5px/1.7 ui-monospace, "SF Mono", monospace; color: var(--dim);
+}
+.log-line { border-bottom: 1px dashed rgba(148, 163, 184, 0.12); padding: 3px 0; word-break: break-all; }
+.log-line:last-child { border-bottom: none; }
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+</style>
+</head>
+<body>
+<!-- 调试面板：业务JS崩溃也能显示错误（治理铁律） -->
+<div id="debug-panel" style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1a2e;color:#0f0;font:11px/1.4 monospace;padding:4px 8px;display:none;max-height:35vh;overflow:auto;border-top:2px solid #0f0;">
+  <div id="debug-panel-log">[debug]</div>
+</div>
+<script>
+(function(){
+  var panel = document.getElementById('debug-panel');
+  var log = document.getElementById('debug-panel-log');
+  var count = 0;
+  window.__dbg = function(msg, isErr){
+    panel.style.display = 'block';
+    count++;
+    var line = document.createElement('div');
+    line.textContent = (isErr ? '\u2717 ' : '\u00b7 ') + String(msg).slice(0, 300);
+    if (isErr) line.style.color = '#f55';
+    log.appendChild(line);
+    if (count > 50) { log.removeChild(log.firstChild); }
+    panel.scrollTop = panel.scrollHeight;
+  };
+  window.onerror = function(msg, src, line, col){
+    window.__dbg('JS错误: ' + msg + ' @' + (src||'').split('/').pop() + ':' + line + ':' + col, true);
+  };
+  window.addEventListener('unhandledrejection', function(e){
+    window.__dbg('Promise拒绝: ' + (e.reason && e.reason.message || e.reason), true);
+  });
+  var toggle = 0;
+  panel.addEventListener('click', function(){ if (++toggle % 2 === 0) panel.style.display = 'none'; });
+})();
+</script>
+
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-logo">🛡️</div>
+    <div>
+      <div class="topbar-title">Pure<em>Probe</em></div>
+      <div class="topbar-sub">机场节点纯净度体检 · PureProbe</div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">总览</button>
+    <button class="tab" data-tab="nodes">节点</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </nav>
+
+  <main id="tab-overview" class="tab-panel active">
+    <section class="card">
+      <h2>订阅</h2>
+      <div id="sub-list"></div>
+      <div class="row">
+        <input type="url" id="sub-url-input" placeholder="粘贴机场订阅链接 (https://...)" autocomplete="off">
+      </div>
+      <div class="row">
+        <button id="btn-add-sub" class="btn primary">添加订阅</button>
+        <button id="btn-refresh-sub" class="btn">刷新列表</button>
+      </div>
+      <div id="sub-msg" class="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>一键体检</h2>
+      <div class="stat-grid">
+        <div class="stat"><span id="stat-total">-</span><label>节点总数</label></div>
+        <div class="stat"><span id="stat-tested">-</span><label>已测</label></div>
+        <div class="stat"><span id="stat-clean">-</span><label>干净</label></div>
+        <div class="stat"><span id="stat-bad">-</span><label>异常</label></div>
+      </div>
+      <div id="progress-wrap" class="progress-wrap hidden">
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+        <div id="progress-text" class="progress-text">待开始</div>
+      </div>
+      <div class="row">
+        <button id="btn-start" class="btn primary">▶ 开始体检</button>
+        <button id="btn-stop" class="btn danger hidden">■ 停止</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>排行榜 <span class="hint">(干净→污染→不通)</span></h2>
+      <div id="rank-list" class="rank-list"></div>
+    </section>
+  </main>
+
+  <main id="tab-nodes" class="tab-panel">
+    <section class="card">
+      <h2>全部节点 <span id="node-count" class="hint"></span></h2>
+      <div class="row">
+        <select id="filter-status">
+          <option value="all">全部状态</option>
+          <option value="clean">干净</option>
+          <option value="polluted">污染</option>
+          <option value="dead">不通</option>
+          <option value="risky">高风险</option>
+          <option value="unknown">未测</option>
+        </select>
+        <button id="btn-export" class="btn">导出干净节点</button>
+      </div>
+      <div id="node-list"></div>
+    </section>
+  </main>
+
+  <main id="tab-settings" class="tab-panel">
+    <section class="card">
+      <h2>测试设置</h2>
+      <label class="field">
+        <span>并发数 (1-16，默认 8)</span>
+        <input type="number" id="set-concurrency" min="1" max="16" value="8">
+      </label>
+      <label class="field">
+        <span>单请求超时（秒）</span>
+        <input type="number" id="set-timeout" min="2" max="15" value="5">
+      </label>
+      <label class="field">
+        <span>缓存有效期（小时）</span>
+        <input type="number" id="set-cache-hrs" min="1" max="168" value="24">
+      </label>
+      <label class="field checkbox">
+        <input type="checkbox" id="set-incremental" checked>
+        <span>增量模式（缓存内已测节点跳过）</span>
+      </label>
+      <div class="row">
+        <button id="btn-save-settings" class="btn primary">保存设置</button>
+        <button id="btn-clear-cache" class="btn danger">清除缓存</button>
+      </div>
+      <div id="set-msg" class="msg"></div>
+    </section>
+    <section class="card">
+      <h2>关于</h2>
+      <p class="hint">PureProbe v0.1.0 · mihomo 内核 (GPLv3)</p>
+      <p class="hint">测试流量极小：每节点每轮 ≤3 个 204 探活请求</p>
+      <p class="hint">订阅链接仅存本机，不上传任何服务器</p>
+    </section>
+    <section class="card">
+      <h2>日志</h2>
+      <div id="log-list" class="log-list"></div>
+    </section>
+  </main>
+</div>
+
+
+<script>
+/* PureProbe state.js — 全局状态，无 DOM 依赖 */
+window.PureState = {
+  subs: [],            // [{id, url, name, nodeCount, addedAt}]
+  nodes: [],           // [{name, type, server, status, latency, exitIp, riskLevel, checkedAt}]
+  settings: {
+    concurrency: 8,
+    timeoutSec: 5,
+    cacheHours: 24,
+    incremental: true
+  },
+  testing: false,
+  progress: { tested: 0, total: 0, current: '' },
+
+  load() {
+    try {
+      var raw = localStorage.getItem('pureprobe_state');
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d.subs) this.subs = d.subs;
+        if (d.nodes) this.nodes = d.nodes;
+        if (d.settings) Object.assign(this.settings, d.settings);
+      }
+    } catch (e) { if (window.__dbg) __dbg('state.load: ' + e.message, true); }
+  },
+  save() {
+    try {
+      localStorage.setItem('pureprobe_state', JSON.stringify({
+        subs: this.subs,
+        nodes: this.nodes,
+        settings: this.settings
+      }));
+    } catch (e) { if (window.__dbg) __dbg('state.save: ' + e.message, true); }
+  },
+  activeSub() {
+    return this.subs.length ? this.subs[this.subs.length - 1] : null;
+  },
+  nodeByName(name) {
+    for (var i = 0; i < this.nodes.length; i++) if (this.nodes[i].name === name) return this.nodes[i];
+    return null;
+  },
+  summary() {
+    var s = { total: this.nodes.length, tested: 0, clean: 0, bad: 0 };
+    this.nodes.forEach(function (n) {
+      if (n.status && n.status !== 'unknown') {
+        s.tested++;
+        if (n.status === 'clean') s.clean++; else s.bad++;
+      }
+    });
+    return s;
+  }
+};
+
+/* PureProbe bridge-sim.js — 浏览器模拟桥接（真机存在 window.AndroidPure 则跳过）
+ * 与 bridge.js / JavaBridge 三处方法名必须一一对应（PROJECT_RULES） */
+(function () {
+  if (window.AndroidPure) return; // 真机环境，不用模拟
+
+  var SIM_NODES = [
+    { name: 'HK-01 IEPL', type: 'trojan', server: 'hk1.example.com' },
+    { name: 'HK-02 IEPL', type: 'trojan', server: 'hk2.example.com' },
+    { name: 'JP-01 BGP', type: 'vmess', server: 'jp1.example.com' },
+    { name: 'SG-01', type: 'ss', server: 'sg1.example.com' },
+    { name: 'US-01', type: 'vless', server: 'us1.example.com' },
+    { name: 'TW-01', type: 'trojan', server: 'tw1.example.com' }
+  ];
+  // 模拟污染剧本：0死 1污染 2干净 3高风险 4干净 5不通
+  var SIM_OUTCOME = ['dead', 'polluted', 'clean', 'risky', 'clean', 'dead'];
+
+  var sim = {
+    getSubs: function () {
+      return JSON.stringify(window.PureState ? window.PureState.subs : []);
+    },
+    addSubscription: function (url) {
+      var subs = window.PureState ? window.PureState.subs : [];
+      if (!/^https?:\/\//.test(url)) return JSON.stringify({ ok: false, error: 'URL 格式不对' });
+      if (subs.some(function (s) { return s.url === url; })) return JSON.stringify({ ok: false, error: '订阅已存在' });
+      var sub = { id: 'sub-' + Date.now(), url: url, name: '模拟订阅', nodeCount: SIM_NODES.length, addedAt: Date.now() };
+      subs.push(sub);
+      return JSON.stringify({ ok: true, sub: sub, nodes: SIM_NODES });
+    },
+    removeSubscription: function (id) {
+      var subs = window.PureState ? window.PureState.subs : [];
+      window.PureState.subs = subs.filter(function (s) { return s.id !== id; });
+      return JSON.stringify({ ok: true });
+    },
+    refreshSubscription: function (id) {
+      return JSON.stringify({ ok: true, nodes: SIM_NODES });
+    },
+    getNodes: function () {
+      return JSON.stringify(window.PureState ? window.PureState.nodes : []);
+    },
+    startTest: function (nodeNamesJson, concurrency, timeoutSec, incremental) {
+      var names = JSON.parse(nodeNamesJson);
+      var nodes = window.PureState.nodes;
+      var i = 0;
+      var timer = setInterval(function () {
+        if (i >= names.length || (window.PureState && !window.PureState.testing)) {
+          clearInterval(timer);
+          window.onPureTestDone && window.onPureTestDone(JSON.stringify({ ok: true, tested: i }));
+          return;
+        }
+        var n = window.PureState.nodeByName(names[i]);
+        if (n) {
+          n.status = SIM_OUTCOME[i % SIM_OUTCOME.length];
+          n.latency = n.status === 'clean' ? 100 + i * 37 : null;
+          n.exitIp = n.status === 'dead' ? null : '104.28.' + (i + 1) + '.' + (10 + i);
+          n.riskLevel = n.status === 'risky' ? 'high' : (n.status === 'clean' ? 'low' : null);
+          n.checkedAt = Date.now();
+        }
+        i++;
+        window.onPureProgress && window.onPureProgress(JSON.stringify({
+          tested: i, total: names.length, current: n ? n.name : ''
+        }));
+      }, 700); // 模拟每节点 0.7s
+      return JSON.stringify({ ok: true });
+    },
+    stopTest: function () {
+      if (window.PureState) window.PureState.testing = false;
+      return JSON.stringify({ ok: true });
+    },
+    clearCache: function () {
+      var nodes = window.PureState ? window.PureState.nodes : [];
+      nodes.forEach(function (n) { n.status = 'unknown'; n.latency = null; n.exitIp = null; n.riskLevel = null; n.checkedAt = null; });
+      return JSON.stringify({ ok: true });
+    },
+    saveSettings: function (json) {
+      if (window.PureState) Object.assign(window.PureState.settings, JSON.parse(json));
+      return JSON.stringify({ ok: true });
+    },
+    getSettings: function () {
+      return JSON.stringify(window.PureState ? window.PureState.settings : {});
+    }
+  };
+
+  window.AndroidPure = sim;
+  window.AndroidPure.__sim = true; // 标记模拟模式，init.js 用于显示
+  if (window.__dbg) __dbg('bridge-sim 已加载（浏览器模拟模式）');
+})();
+
+/* PureProbe bridge.js — JS 侧统一桥接封装。方法名与 bridge-sim.js / JavaBridge 一一对应 */
+window.PureBridge = {
+  call: function (method) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    if (!window.AndroidPure || typeof window.AndroidPure[method] !== 'function') {
+      return Promise.reject(new Error('桥接方法不存在: ' + method));
+    }
+    try {
+      var raw = window.AndroidPure[method].apply(window.AndroidPure, args);
+      var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Promise.resolve(data);
+    } catch (e) {
+      if (window.__dbg) __dbg('bridge.' + method + ': ' + e.message, true);
+      return Promise.reject(e);
+    }
+  },
+  // 便捷方法（与 JavaBridge/bridge-sim 方法名对应）
+  getSubs: function () { return this.call('getSubs'); },
+  addSubscription: function (url) { return this.call('addSubscription', url); },
+  removeSubscription: function (id) { return this.call('removeSubscription', id); },
+  refreshSubscription: function (id) { return this.call('refreshSubscription', id); },
+  getNodes: function () { return this.call('getNodes'); },
+  startTest: function (nodeNames, concurrency, timeoutSec, incremental) {
+    return this.call('startTest', JSON.stringify(nodeNames), concurrency, timeoutSec, incremental);
+  },
+  stopTest: function () { return this.call('stopTest'); },
+  clearCache: function () { return this.call('clearCache'); },
+  saveSettings: function (settings) { return this.call('saveSettings', JSON.stringify(settings)); },
+  getSettings: function () { return this.call('getSettings'); },
+
+  // 原生 → JS 回调（Java 侧通过 evaluateJavascript 调用这些全局函数）
+  _progressCb: null, _doneCb: null,
+  onProgress: function (cb) { this._progressCb = cb; },
+  onDone: function (cb) { this._doneCb = cb; }
+};
+
+// 原生回调入口（Java 调 window.onPureProgress(json) / window.onPureTestDone(json)）
+window.onPureProgress = function (json) {
+  try { PureBridge._progressCb && PureBridge._progressCb(JSON.parse(json)); }
+  catch (e) { __dbg('onPureProgress: ' + e.message, true); }
+};
+window.onPureTestDone = function (json) {
+  try { PureBridge._doneCb && PureBridge._doneCb(JSON.parse(json)); }
+  catch (e) { __dbg('onPureTestDone: ' + e.message, true); }
+};
+
+/* PureProbe render.js — 全部 DOM 渲染。禁止未转义 innerHTML（用 esc()） */
+(function () {
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var STATUS_LABEL = { clean: '✅ 干净', polluted: '⚠️ 污染', dead: '⛔ 不通', risky: '🚫 高风险', unknown: '— 未测' };
+  var STATUS_CLASS = { clean: 'st-clean', polluted: 'st-polluted', dead: 'st-dead', risky: 'st-risky', unknown: 'st-unknown' };
+  var STATUS_ORDER = { clean: 0, polluted: 1, risky: 2, dead: 3, unknown: 4 };
+
+  function el(id) { return document.getElementById(id); }
+
+  window.PureRender = {
+    esc: esc,
+
+    renderSubs: function () {
+      var box = el('sub-list');
+      var subs = PureState.subs;
+      if (!subs.length) { box.innerHTML = '<div class="hint">还没有订阅</div>'; return; }
+      box.innerHTML = subs.map(function (s) {
+        return '<div class="sub-item" data-id="' + esc(s.id) + '">' +
+          '<div class="sub-main"><b>' + esc(s.name) + '</b>' +
+          '<span class="hint"> ' + (s.nodeCount || '?') + ' 节点</span></div>' +
+          '<button class="btn tiny btn-del-sub" data-id="' + esc(s.id) + '">删除</button>' +
+          '</div>';
+      }).join('');
+    },
+
+    renderStats: function () {
+      var s = PureState.summary();
+      el('stat-total').textContent = s.total;
+      el('stat-tested').textContent = s.tested;
+      el('stat-clean').textContent = s.clean;
+      el('stat-bad').textContent = s.bad;
+    },
+
+    renderProgress: function () {
+      var p = PureState.progress;
+      var wrap = el('progress-wrap');
+      if (PureState.testing) wrap.classList.remove('hidden'); else wrap.classList.add('hidden');
+      var pct = p.total ? Math.round(p.tested / p.total * 100) : 0;
+      el('progress-bar').style.width = pct + '%';
+      el('progress-text').textContent = PureState.testing
+        ? ('测试中 ' + p.tested + '/' + p.total + ' · ' + (p.current || '…'))
+        : (p.total ? '完成 ' + p.tested + '/' + p.total : '待开始');
+      el('btn-start').classList.toggle('hidden', PureState.testing);
+      el('btn-stop').classList.toggle('hidden', !PureState.testing);
+    },
+
+    nodeRow: function (n, rank) {
+      var lat = n.latency != null ? n.latency + 'ms' : '—';
+      var ip = n.exitIp || '—';
+      var rankStr = rank != null ? '<span class="rank">' + rank + '</span>' : '';
+      return '<div class="node-row ' + STATUS_CLASS[n.status || 'unknown'] + '">' +
+        rankStr +
+        '<div class="node-main"><b>' + esc(n.name) + '</b>' +
+        '<span class="hint">' + esc(n.type || '') + ' · ' + esc(ip) + ' · ' + lat + '</span></div>' +
+        '<span class="node-status">' + (STATUS_LABEL[n.status || 'unknown']) + '</span>' +
+        '</div>';
+    },
+
+    renderRank: function () {
+      var box = el('rank-list');
+      var list = PureState.nodes.slice().sort(function (a, b) {
+        var oa = STATUS_ORDER[a.status || 'unknown'], ob = STATUS_ORDER[b.status || 'unknown'];
+        if (oa !== ob) return oa - ob;
+        return (a.latency || 9999) - (b.latency || 9999);
+      });
+      if (!list.length) { box.innerHTML = '<div class="hint">添加订阅并体检后这里出排行榜</div>'; return; }
+      box.innerHTML = list.slice(0, 50).map(function (n, i) { return PureRender.nodeRow(n, i + 1); }).join('');
+    },
+
+    renderNodeList: function (filter) {
+      var box = el('node-list');
+      var list = PureState.nodes.filter(function (n) {
+        return filter === 'all' || (n.status || 'unknown') === filter;
+      });
+      el('node-count').textContent = '(' + list.length + ')';
+      if (!list.length) { box.innerHTML = '<div class="hint">无匹配节点</div>'; return; }
+      box.innerHTML = list.map(function (n) { return PureRender.nodeRow(n, null); }).join('');
+    },
+
+    renderLogs: function (logs) {
+      el('log-list').innerHTML = logs.length
+        ? logs.map(function (l) { return '<div class="log-line">' + esc(l) + '</div>'; }).join('')
+        : '<div class="hint">无日志</div>';
+    },
+
+    renderAll: function () {
+      this.renderSubs();
+      this.renderStats();
+      this.renderProgress();
+      this.renderRank();
+      this.renderNodeList(el('filter-status').value);
+    }
+  };
+})();
+
+/* PureProbe test.js — 体检流程编排（前端侧）：组装节点名单、调桥接、收进度 */
+(function () {
+  var logs = [];
+
+  function log(msg) {
+    logs.unshift(new Date().toLocaleTimeString() + ' ' + msg);
+    if (logs.length > 100) logs.pop();
+    PureRender.renderLogs(logs);
+  }
+
+  function freshNodes(incremental, cacheHours) {
+    var now = Date.now();
+    var cutoff = cacheHours * 3600 * 1000;
+    return PureState.nodes.filter(function (n) {
+      if (!incremental) return true;
+      // 增量：缓存内已测且未过期的跳过
+      if (n.status && n.status !== 'unknown' && n.checkedAt && (now - n.checkedAt) < cutoff) return false;
+      return true;
+    }).map(function (n) { return n.name; });
+  }
+
+  window.PureTest = {
+    isRunning: function () { return PureState.testing; },
+
+    start: function () {
+      if (PureState.testing) return;
+      if (!PureState.nodes.length) { log('无节点，请先添加订阅'); return; }
+      var names = freshNodes(PureState.settings.incremental, PureState.settings.cacheHours);
+      if (!names.length) { log('增量模式下无待测节点（可清缓存或关闭增量）'); return; }
+      PureState.testing = true;
+      PureState.progress = { tested: 0, total: names.length, current: '' };
+      PureState.save();
+      PureRender.renderAll();
+      log('开始体检 ' + names.length + ' 个节点，并发 ' + PureState.settings.concurrency);
+      PureBridge.onProgress(function (p) {
+        PureState.progress = p;
+        PureRender.renderProgress();
+      });
+      PureBridge.onDone(function (r) {
+        PureState.testing = false;
+        PureState.save();
+        PureRender.renderAll();
+        log(r.ok ? ('体检完成，共测 ' + r.tested + ' 个') : ('体检失败: ' + (r.error || '未知')));
+      });
+      PureBridge.startTest(names, PureState.settings.concurrency, PureState.settings.timeoutSec, PureState.settings.incremental)
+        .catch(function (e) {
+          PureState.testing = false;
+          PureRender.renderAll();
+          log('启动失败: ' + e.message);
+        });
+    },
+
+    stop: function () {
+      if (!PureState.testing) return;
+      PureBridge.stopTest().then(function () { log('已请求停止'); });
+    },
+
+    logs: function () { return logs; },
+    log: log
+  };
+})();
+
+/* PureProbe init.js — 入口：加载状态、绑定事件、首次渲染 */
+(function () {
+  function el(id) { return document.getElementById(id); }
+  function msg(id, text, ok) {
+    var box = el(id);
+    box.textContent = text;
+    box.className = 'msg ' + (ok ? 'ok' : 'err');
+    setTimeout(function () { box.textContent = ''; }, 4000);
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('active', t.dataset.tab === name);
+    });
+    document.querySelectorAll('.tab-panel').forEach(function (p) {
+      p.classList.toggle('active', p.id === 'tab-' + name);
+    });
+  }
+
+  function bind() {
+    // Tab 切换
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.addEventListener('click', function () { switchTab(t.dataset.tab); });
+    });
+
+    // 订阅
+    el('btn-add-sub').addEventListener('click', function () {
+      var url = el('sub-url-input').value.trim();
+      if (!url) { msg('sub-msg', '请先粘贴订阅链接', false); return; }
+      PureBridge.addSubscription(url).then(function (r) {
+        if (r.ok) {
+          PureState.nodes = r.nodes || PureState.nodes;
+          PureState.save();
+          PureRender.renderAll();
+          el('sub-url-input').value = '';
+          PureTest.log('订阅已添加，解析到 ' + (r.nodes ? r.nodes.length : 0) + ' 个节点');
+        } else {
+          msg('sub-msg', r.error || '添加失败', false);
+        }
+      }).catch(function (e) { msg('sub-msg', '桥接失败: ' + e.message, false); });
+    });
+
+    el('btn-refresh-sub').addEventListener('click', function () {
+      PureBridge.getSubs().then(function (subs) {
+        PureState.subs = subs || [];
+        PureRender.renderSubs();
+        PureTest.log('订阅列表已刷新，共 ' + PureState.subs.length + ' 个');
+      });
+    });
+
+    el('sub-list').addEventListener('click', function (ev) {
+      var btn = ev.target.closest('.btn-del-sub');
+      if (!btn) return;
+      var id = btn.dataset.id;
+      PureBridge.removeSubscription(id).then(function (r) {
+        if (r.ok) {
+          PureState.subs = PureState.subs.filter(function (s) { return s.id !== id; });
+          PureState.save();
+          PureRender.renderAll();
+          PureTest.log('订阅已删除');
+        }
+      });
+    });
+
+    // 体检
+    el('btn-start').addEventListener('click', function () { PureTest.start(); });
+    el('btn-stop').addEventListener('click', function () { PureTest.stop(); });
+
+    // 节点列表
+    el('filter-status').addEventListener('change', function () {
+      PureRender.renderNodeList(this.value);
+    });
+
+    el('btn-export').addEventListener('click', function () {
+      var clean = PureState.nodes.filter(function (n) { return n.status === 'clean'; })
+        .sort(function (a, b) { return (a.latency || 9999) - (b.latency || 9999); });
+      if (!clean.length) { PureTest.log('没有干净节点可导出'); return; }
+      var text = clean.map(function (n, i) {
+        return (i + 1) + '. ' + n.name + '  ' + (n.latency || '-') + 'ms  ' + (n.exitIp || '');
+      }).join('\n');
+      var done = function () { PureTest.log('已导出 ' + clean.length + ' 个干净节点'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { PureTest.log('复制失败，请手动选择'); });
+      } else { done(); }
+    });
+
+    // 设置
+    el('btn-save-settings').addEventListener('click', function () {
+      var c = parseInt(el('set-concurrency').value, 10) || 8;
+      var t = parseInt(el('set-timeout').value, 10) || 5;
+      var h = parseInt(el('set-cache-hrs').value, 10) || 24;
+      PureState.settings = {
+        concurrency: Math.min(16, Math.max(1, c)),
+        timeoutSec: Math.min(15, Math.max(2, t)),
+        cacheHours: Math.min(168, Math.max(1, h)),
+        incremental: el('set-incremental').checked
+      };
+      PureBridge.saveSettings(PureState.settings).then(function (r) {
+        if (r.ok) {
+          PureState.save();
+          PureRender.renderAll();
+          msg('set-msg', '设置已保存', true);
+        }
+      });
+    });
+
+    el('btn-clear-cache').addEventListener('click', function () {
+      PureBridge.clearCache().then(function (r) {
+        if (r.ok) {
+          PureState.save();
+          PureRender.renderAll();
+          msg('set-msg', '缓存已清除', true);
+          PureTest.log('缓存已清除');
+        }
+      });
+    });
+  }
+
+  function loadSettingsForm() {
+    el('set-concurrency').value = PureState.settings.concurrency;
+    el('set-timeout').value = PureState.settings.timeoutSec;
+    el('set-cache-hrs').value = PureState.settings.cacheHours;
+    el('set-incremental').checked = !!PureState.settings.incremental;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    PureState.load();
+    loadSettingsForm();
+    bind();
+    // 首次从桥接同步（真机时桥接侧有持久数据）
+    PureBridge.getSubs().then(function (subs) {
+      if (subs && subs.length) { PureState.subs = subs; }
+      return PureBridge.getNodes();
+    }).then(function (nodes) {
+      if (nodes && nodes.length) { PureState.nodes = nodes; }
+      PureRender.renderAll();
+      PureTest.log('PureProbe 就绪' + (window.AndroidPure && !window.AndroidPure.__sim ? '（真机模式）' : '（浏览器模拟模式）'));
+    }).catch(function (e) {
+      PureRender.renderAll();
+      __dbg('初始化桥接失败: ' + e.message, true);
+    });
+  });
+})();
+
+
+</script>
+</body>
+</html>
