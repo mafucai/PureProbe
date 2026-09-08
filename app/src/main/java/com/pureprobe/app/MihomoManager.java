@@ -110,15 +110,21 @@ public class MihomoManager {
         return proc != null;
     }
 
-    /** 停止内核：杀整个进程组，防僵尸进程（RISK_CHECKLIST 技术风险项） */
+    /** 停止内核：先优雅退出再强杀，防僵尸进程（RISK_CHECKLIST 技术风险项） */
     public synchronized void stop() {
         if (proc != null) {
             try {
-                android.os.Process.killProcess(proc.pid());
+                proc.destroy();
+                try {
+                    if (!proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                        proc.destroyForcibly();
+                    }
+                } catch (InterruptedException ie) {
+                    proc.destroyForcibly();
+                }
             } catch (Throwable t) {
                 // ignore
             }
-            proc.destroy();
             proc = null;
         }
     }

@@ -31,4 +31,5 @@
 
 | 失败 | 根因 | 应对 |
 |---|---|---|
-| （待填） | | |
+| Run#34204801806 下载内核 404 | mihomo android 资产名是 `mihomo-android-arm64-v8-版本.gz`（多了 -v8），按猜的 `arm64` 写 URL 404 | 下载前先查 release 真实资产名（API），workflow 已修正 |
+| Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |
