@@ -24,7 +24,11 @@
 
     start: function () {
       if (PureState.testing) return;
-      if (!PureState.nodes.length) { log('无节点，请先添加订阅'); return; }
+      if (!PureState.nodes.length) {
+        PureRender.renderAll();
+        PureTest.log('⚠️ 没有节点：先在上方添加订阅（需网络可直连机场）');
+        return;
+      }
       var names = freshNodes(PureState.settings.incremental, PureState.settings.cacheHours);
       if (!names.length) { log('增量模式下无待测节点（可清缓存或关闭增量）'); return; }
       PureState.testing = true;

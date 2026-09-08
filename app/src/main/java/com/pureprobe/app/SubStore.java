@@ -118,13 +118,13 @@ public class SubStore {
         }
     }
 
-    /** 刷新订阅：启动 mihomo 用 provider 拉订阅并解析节点，读 API 取节点清单 */
+    /** 刷新订阅：启动 mihomo 用 provider 拉订阅，轮询等节点就绪（订阅下载是异步的） */
     public synchronized String refreshSubscription(String id, TestEngine engine) {
         try {
             JSONObject sub = findSub(id);
             if (sub == null) return PureState.errorJson("订阅不存在");
             if (!ensureKernel(engine)) return PureState.errorJson("内核启动失败");
-            JSONArray names = fetchProviderNodes();
+            JSONArray names = fetchProviderNodesRetry(20);
             sub.put("nodeCount", names.length());
             writeJson(subsFile(), subs);
             // 合并节点（保留旧测试结果）
@@ -140,11 +140,33 @@ public class SubStore {
             persistNodes();
             JSONObject r = new JSONObject();
             r.put("ok", true);
+            r.put("count", names.length());
             r.put("nodes", buildNodeListForJs());
             return r.toString();
         } catch (Exception e) {
             return PureState.errorJson(safeMsg(e));
         }
+    }
+
+    /** 轮询 provider 节点就绪（内核异步下载订阅，API 起来≠下载完）。超时带诊断信息报错 */
+    private JSONArray fetchProviderNodesRetry(int maxWaitSec) throws Exception {
+        long deadline = System.currentTimeMillis() + maxWaitSec * 1000L;
+        JSONArray names = new JSONArray();
+        Exception last = null;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                names = fetchProviderNodes();
+                if (names.length() > 0) return names;
+            } catch (Exception e) {
+                last = e;
+            }
+            Thread.sleep(1000);
+        }
+        File pf = new File(ctx.getFilesDir(), "mihomo/providers/sub.yaml");
+        long size = pf.exists() ? pf.length() : -1;
+        throw new Exception("订阅拉取失败(" + maxWaitSec + "s超时): provider文件大小=" + size
+                + (last != null ? ", 最后错误=" + safeMsg(last) : "")
+                + "。请检查订阅链接是否可直连");
     }
 
     private JSONObject findSub(String id) throws Exception {

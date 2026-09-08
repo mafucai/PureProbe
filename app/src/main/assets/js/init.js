@@ -27,17 +27,28 @@
     el('btn-add-sub').addEventListener('click', function () {
       var url = el('sub-url-input').value.trim();
       if (!url) { msg('sub-msg', '请先粘贴订阅链接', false); return; }
+      var btn = el('btn-add-sub');
+      btn.disabled = true;
+      btn.textContent = '拉取订阅中…（最多 20 秒）';
+      msg('sub-msg', '正在启动内核并下载订阅…', true);
       PureBridge.addSubscription(url).then(function (r) {
+        btn.disabled = false;
+        btn.textContent = '添加订阅';
         if (r.ok) {
           PureState.nodes = r.nodes || PureState.nodes;
           PureState.save();
           PureRender.renderAll();
           el('sub-url-input').value = '';
-          PureTest.log('订阅已添加，解析到 ' + (r.nodes ? r.nodes.length : 0) + ' 个节点');
+          PureTest.log('订阅已添加，解析到 ' + (r.count != null ? r.count : (r.nodes ? r.nodes.length : 0)) + ' 个节点');
         } else {
           msg('sub-msg', r.error || '添加失败', false);
+          PureTest.log('添加订阅失败: ' + (r.error || ''));
         }
-      }).catch(function (e) { msg('sub-msg', '桥接失败: ' + e.message, false); });
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.textContent = '添加订阅';
+        msg('sub-msg', '桥接失败: ' + e.message, false);
+      });
     });
 
     el('btn-refresh-sub').addEventListener('click', function () {
