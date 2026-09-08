@@ -71,7 +71,10 @@ public class MihomoManager {
         if (isRunning()) return true;
         String bin = ctx.getApplicationInfo().nativeLibraryDir + "/libmihomo.so";
         File f = new File(bin);
-        if (!f.exists()) throw new IOException("内核二进制缺失: " + bin);
+        if (!f.exists()) {
+            throw new IOException("内核二进制缺失 (nativeLibraryDir=" + ctx.getApplicationInfo().nativeLibraryDir
+                    + ", 需重装触发解压)");
+        }
         if (!f.canExecute() && !f.setExecutable(true, false)) {
             throw new IOException("内核无执行权限");
         }

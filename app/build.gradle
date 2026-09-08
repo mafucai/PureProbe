@@ -7,8 +7,14 @@ android {
         applicationId 'com.pureprobe.app'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.1.1'
+    }
+    packagingOptions {
+        jniLibs {
+            // 必须开：否则 AGP8 默认不解压 .so 到 nativeLibraryDir，内核没法 exec（Run#3 报"内核二进制缺失"根因）
+            useLegacyPackaging = true
+        }
     }
     buildTypes {
         release { minifyEnabled false }
