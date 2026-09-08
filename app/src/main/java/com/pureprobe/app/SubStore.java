@@ -83,10 +83,16 @@ public class SubStore {
         try {
             String trimmed = url == null ? "" : url.trim();
             if (!trimmed.startsWith("http")) return PureState.errorJson("URL 格式不对");
+            JSONObject existing = null;
             for (int i = 0; i < subs.length(); i++) {
                 if (trimmed.equals(subs.getJSONObject(i).optString("url"))) {
-                    return PureState.errorJson("订阅已存在");
+                    existing = subs.getJSONObject(i);
+                    break;
                 }
+            }
+            if (existing != null) {
+                // 已存在：不报错，直接重新拉节点（修"订阅已存在死锁"——之前卡这里永远拉不到节点）
+                return refreshSubscription(existing.optString("id"), engine);
             }
             JSONObject sub = new JSONObject();
             sub.put("id", "sub-" + System.currentTimeMillis());

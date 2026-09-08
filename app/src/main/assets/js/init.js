@@ -60,17 +60,38 @@
     });
 
     el('sub-list').addEventListener('click', function (ev) {
-      var btn = ev.target.closest('.btn-del-sub');
-      if (!btn) return;
-      var id = btn.dataset.id;
-      PureBridge.removeSubscription(id).then(function (r) {
-        if (r.ok) {
-          PureState.subs = PureState.subs.filter(function (s) { return s.id !== id; });
-          PureState.save();
-          PureRender.renderAll();
-          PureTest.log('订阅已删除');
-        }
-      });
+      var del = ev.target.closest('.btn-del-sub');
+      if (del) {
+        var id = del.dataset.id;
+        PureBridge.removeSubscription(id).then(function (r) {
+          if (r.ok) {
+            PureState.subs = PureState.subs.filter(function (s) { return s.id !== id; });
+            PureState.save();
+            PureRender.renderAll();
+            PureTest.log('订阅已删除');
+          }
+        });
+        return;
+      }
+      var ref = ev.target.closest('.btn-ref-sub');
+      if (ref) {
+        var rid = ref.dataset.id;
+        ref.textContent = '拉取中…';
+        PureBridge.refreshSubscription(rid).then(function (r) {
+          PureRender.renderSubs();
+          if (r.ok) {
+            PureState.nodes = r.nodes || PureState.nodes;
+            PureState.save();
+            PureRender.renderAll();
+            PureTest.log('订阅已刷新，共 ' + (r.count != null ? r.count : PureState.nodes.length) + ' 个节点');
+          } else {
+            PureTest.log('刷新失败: ' + (r.error || ''));
+          }
+        }).catch(function (e) {
+          PureRender.renderSubs();
+          PureTest.log('刷新失败: ' + e.message);
+        });
+      }
     });
 
     // 体检
@@ -146,6 +167,20 @@
       if (nodes && nodes.length) { PureState.nodes = nodes; }
       PureRender.renderAll();
       PureTest.log('PureProbe 就绪' + (window.AndroidPure && !window.AndroidPure.__sim ? '（真机模式）' : '（浏览器模拟模式）'));
+      // 有订阅但没节点（历史版本存了订阅没拉到）→ 自动补拉
+      if (PureState.subs.length && !PureState.nodes.length) {
+        PureTest.log('检测到有订阅但无节点，自动重新拉取…');
+        PureBridge.refreshSubscription(PureState.subs[PureState.subs.length - 1].id).then(function (r) {
+          if (r.ok) {
+            PureState.nodes = r.nodes || [];
+            PureState.save();
+            PureRender.renderAll();
+            PureTest.log('补拉成功，共 ' + (r.count != null ? r.count : PureState.nodes.length) + ' 个节点');
+          } else {
+            PureTest.log('补拉失败: ' + (r.error || ''));
+          }
+        }).catch(function (e) { PureTest.log('补拉失败: ' + e.message); });
+      }
     }).catch(function (e) {
       PureRender.renderAll();
       __dbg('初始化桥接失败: ' + e.message, true);

@@ -23,6 +23,7 @@
         return '<div class="sub-item" data-id="' + esc(s.id) + '">' +
           '<div class="sub-main"><b>' + esc(s.name) + '</b>' +
           '<span class="hint"> ' + (s.nodeCount || '?') + ' 节点</span></div>' +
+          '<button class="btn tiny btn-ref-sub" data-id="' + esc(s.id) + '">刷新</button>' +
           '<button class="btn tiny btn-del-sub" data-id="' + esc(s.id) + '">删除</button>' +
           '</div>';
       }).join('');
