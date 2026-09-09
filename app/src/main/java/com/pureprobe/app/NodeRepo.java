@@ -54,7 +54,7 @@ public class NodeRepo {
         } catch (Exception ignored) {}
     }
 
-    public synchronized JSONArray setResult(String name, String status, Integer latency, String exitIp, String risk) {
+    public synchronized JSONObject setResult(String name, String status, Integer latency, String exitIp, String risk) {
         try {
             JSONObject o = nodes.has(name) ? nodes.getJSONObject(name) : new JSONObject();
             o.put("status", status);
