@@ -15,11 +15,14 @@ import java.util.Iterator;
 /**
  * SubStore：订阅与结果持久化（getFilesDir，App 私有）+ 订阅刷新。
  * 红线：订阅 URL 不落日志；持久化文件仅私有目录；不联网上传任何数据。
+ * 并发模型（bug#9 教训）：网络等待绝不持锁；synchronized 只护毫秒级内存/文件写；
+ * 拉订阅用 refreshing 标志防重入。
  */
 public class SubStore {
     private final Context ctx;
     private JSONArray subs;
     private JSONObject nodes; // name -> {status, latency, exitIp, riskLevel, checkedAt, type}
+    private MihomoManager mihomoRef;
 
     public SubStore(Context ctx) {
         this.ctx = ctx;
@@ -27,6 +30,9 @@ public class SubStore {
         nodes = new JSONObject();
         load();
     }
+
+    /** 供 MainActivity 装配：SubStore 刷新时需要启动内核 */
+    public void bind(MihomoManager m) { this.mihomoRef = m; }
 
     private File subsFile() { return new File(ctx.getFilesDir(), "pureprobe_subs.json"); }
     private File nodesFile() { return new File(ctx.getFilesDir(), "pureprobe_nodes.json"); }
@@ -79,32 +85,34 @@ public class SubStore {
     // ---------- 桥接：订阅 ----------
     public synchronized String getSubsJson() { return subs.toString(); }
 
-    public synchronized String addSubscription(String url, TestEngine engine) {
+    /** 添加订阅：锁内只做去重+落盘；网络刷新走 refreshSubscription（无锁网络等待） */
+    public String addSubscription(String url, TestEngine engine) {
+        String refreshId = null;
+        String newSubId = null;
         try {
             String trimmed = url == null ? "" : url.trim();
             if (!trimmed.startsWith("http")) return PureState.errorJson("URL 格式不对");
-            JSONObject existing = null;
-            for (int i = 0; i < subs.length(); i++) {
-                if (trimmed.equals(subs.getJSONObject(i).optString("url"))) {
-                    existing = subs.getJSONObject(i);
-                    break;
+            synchronized (this) {
+                for (int i = 0; i < subs.length(); i++) {
+                    if (trimmed.equals(subs.getJSONObject(i).optString("url"))) {
+                        refreshId = subs.getJSONObject(i).optString("id");
+                        break;
+                    }
+                }
+                if (refreshId == null) {
+                    newSubId = "sub-" + System.currentTimeMillis();
+                    JSONObject sub = new JSONObject();
+                    sub.put("id", newSubId);
+                    sub.put("url", trimmed);
+                    sub.put("name", "订阅 " + (subs.length() + 1));
+                    sub.put("addedAt", System.currentTimeMillis());
+                    sub.put("nodeCount", 0);
+                    subs.put(sub);
+                    writeJson(subsFile(), subs);
                 }
             }
-            if (existing != null) {
-                // 已存在：不报错，直接重新拉节点（修"订阅已存在死锁"——之前卡这里永远拉不到节点）
-                return refreshSubscription(existing.optString("id"), engine);
-            }
-            JSONObject sub = new JSONObject();
-            sub.put("id", "sub-" + System.currentTimeMillis());
-            sub.put("url", trimmed);
-            sub.put("name", "订阅 " + (subs.length() + 1));
-            sub.put("addedAt", System.currentTimeMillis());
-            sub.put("nodeCount", 0);
-            subs.put(sub);
-            writeJson(subsFile(), subs);
-            // 立即刷新拿节点
-            String refresh = refreshSubscription(sub.getString("id"), engine);
-            return refresh;
+            // 已存在→重拉（修"订阅已存在死锁"）；新订阅→立即拉节点
+            return refreshSubscription(refreshId != null ? refreshId : newSubId, engine);
         } catch (Exception e) {
             return PureState.errorJson(safeMsg(e));
         }
@@ -124,34 +132,65 @@ public class SubStore {
         }
     }
 
-    /** 刷新订阅：启动 mihomo 用 provider 拉订阅，轮询等节点就绪（订阅下载是异步的） */
-    public synchronized String refreshSubscription(String id, TestEngine engine) {
+    /** 刷新订阅：网络等待不持锁。锁只护内存/文件写。refreshing 防重入（bug#9） */
+    private volatile boolean refreshing = false;
+
+    public String refreshSubscription(String id, TestEngine engine) {
+        if (refreshing) return PureState.errorJson("已有拉取在进行，稍候");
+        synchronized (this) {
+            if (refreshing) return PureState.errorJson("已有拉取在进行，稍候");
+            refreshing = true;
+        }
         try {
-            JSONObject sub = findSub(id);
+            // ---- 无锁段：内核启动 + 网络轮询（最长20s+） ----
+            JSONObject sub;
+            synchronized (this) { sub = findSub(id); }
             if (sub == null) return PureState.errorJson("订阅不存在");
-            if (!ensureKernel(engine)) return PureState.errorJson("内核启动失败");
+            if (!ensureKernel()) return PureState.errorJson("内核启动失败");
             JSONArray names = fetchProviderNodesRetry(20);
-            sub.put("nodeCount", names.length());
-            writeJson(subsFile(), subs);
-            // 合并节点（保留旧测试结果）
-            for (int i = 0; i < names.length(); i++) {
-                String name = names.getString(i);
-                if (!nodes.has(name)) {
-                    JSONObject o = new JSONObject();
-                    o.put("status", "unknown");
-                    o.put("type", "");
-                    nodes.put(name, o);
+            // ---- 锁内段：纯内存/文件写，毫秒级 ----
+            synchronized (this) {
+                sub.put("nodeCount", names.length());
+                writeJson(subsFile(), subs);
+                for (int i = 0; i < names.length(); i++) {
+                    String name = names.getString(i);
+                    if (!nodes.has(name)) {
+                        JSONObject o = new JSONObject();
+                        o.put("status", "unknown");
+                        o.put("type", "");
+                        nodes.put(name, o);
+                    }
                 }
+                persistNodes();
             }
-            persistNodes();
             JSONObject r = new JSONObject();
             r.put("ok", true);
             r.put("count", names.length());
-            r.put("nodes", buildNodeListForJs());
+            synchronized (this) {
+                r.put("nodes", buildNodeListForJs());
+            }
             return r.toString();
         } catch (Exception e) {
             return PureState.errorJson(safeMsg(e));
+        } finally {
+            refreshing = false;
         }
+    }
+
+    private JSONObject findSub(String id) throws Exception {
+        for (int i = 0; i < subs.length(); i++) {
+            JSONObject s = subs.getJSONObject(i);
+            if (id.equals(s.optString("id"))) return s;
+        }
+        return null;
+    }
+
+    private boolean ensureKernel() throws Exception {
+        if (mihomoRef == null) return false;
+        if (mihomoRef.isRunning()) return true;
+        if (subs.length() == 0) return false;
+        String url = subs.getJSONObject(subs.length() - 1).optString("url");
+        return mihomoRef.start(url);
     }
 
     /** 轮询 provider 节点就绪（内核异步下载订阅，API 起来≠下载完）。超时带诊断信息报错 */
@@ -174,27 +213,6 @@ public class SubStore {
                 + (last != null ? ", 最后错误=" + safeMsg(last) : "")
                 + "。请检查订阅链接是否可直连");
     }
-
-    private JSONObject findSub(String id) throws Exception {
-        for (int i = 0; i < subs.length(); i++) {
-            JSONObject s = subs.getJSONObject(i);
-            if (id.equals(s.optString("id"))) return s;
-        }
-        return null;
-    }
-
-    private boolean ensureKernel(TestEngine engine) throws Exception {
-        if (mihomoRef == null) return false;
-        if (mihomoRef.isRunning()) return true;
-        if (subs.length() == 0) return false;
-        String url = subs.getJSONObject(subs.length() - 1).optString("url");
-        return mihomoRef.start(url);
-    }
-
-    private MihomoManager mihomoRef;
-
-    /** 供 MainActivity 装配：SubStore 刷新时需要启动内核 */
-    public void bind(MihomoManager m) { this.mihomoRef = m; }
 
     /** 从内核 API 读 provider 节点名清单 */
     private JSONArray fetchProviderNodes() throws Exception {
@@ -245,7 +263,7 @@ public class SubStore {
         return out;
     }
 
-    /** TestEngine 回写结果（内存 + 磁盘） */
+    /** TestEngine 回写结果（内存；磁盘由收尾线程统一落） */
     public synchronized void setNodeResult(String name, String status, Integer latency, String exitIp, String risk) {
         try {
             JSONObject o = nodes.has(name) ? nodes.getJSONObject(name) : new JSONObject();
