@@ -1,7 +1,8 @@
 # PureProbe 节点体检 — 项目规则
 
+> **状态：已归档（2026-09-10），主人决定停止修复。** 最终状态/剩余嫌疑/重启指引 → `docs/DELIVERY-REPORT.md`
 > 定位：给主人个人的 Android 工具 App。输入机场订阅链接，自动逐节点体检（死活 → 污染 → 出口 IP 纯净度），产出"干净节点"排行榜和可导出的排除名单。
-> 仓库：github.com/mafucai/PureProbe（SSH）· 编译：仅 GitHub Actions 云端，本地零 Android SDK。
+> 仓库：github.com/mafucai/PureProbe · 编译：仅 GitHub Actions 云端，本地零 Android SDK。
 
 ## 铁律
 
