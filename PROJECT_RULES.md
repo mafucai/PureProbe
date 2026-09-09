@@ -37,3 +37,4 @@
 | Run#34204801806 下载内核 404 | mihomo android 资产名是 `mihomo-android-arm64-v8-版本.gz`（多了 -v8），按猜的 `arm64` 写 URL 404 | 下载前先查 release 真实资产名（API），workflow 已修正 |
 | Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |
 | build-13 (v0.2.4) 真机"全部不通"但用户代理正常可用 | **Java SOCKS 代理在本地解析 DNS**（gstatic 被污染解析成假 IP→直连失败→全标 dead）；且全 dead 结果被增量缓存→之后"无待测节点"永远测不了（bug#15叠加） | ① 探活改走 mihomo **混合端口 HTTP CONNECT**（域名由内核远程解析，与用户翻墙行为一致，本机双204验证）；② 增量缓存只跳过 clean，dead/polluted 每轮重测（v0.2.5）。教训：Java Proxy.Type.SOCKS ≠ 远程DNS，翻墙探活必须 HTTP CONNECT |
+| build-14 (v0.2.5) 真机仍全dead | **mode:global 下 GLOBAL.now=DIRECT，流量不走 PROBE 组，select 全是空操作**（真内核复现铁证：切节点出口 IP 恒不变） | 配置改 mode:rule + MATCH,PROBE（本机实测：select 后出口真实切换 Singapore）。另：REALITY 节点 authentication failed 为节点侧/兼容问题（指纹 ios/chrome/无 三种均失败），hy2 为沙盒 UDP 阻断（真机待验）→ v0.2.6 加 reason 诊断字段 |

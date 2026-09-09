@@ -55,12 +55,19 @@ public class NodeRepo {
     }
 
     public synchronized JSONObject setResult(String name, String status, Integer latency, String exitIp, String risk) {
+        return setResult(name, status, latency, exitIp, risk, null);
+    }
+
+    /** 带失败原因版本（reason: REALITY认证失败/DNS污染/探活超时...） */
+    public synchronized JSONObject setResult(String name, String status, Integer latency, String exitIp,
+                                             String risk, String reason) {
         try {
             JSONObject o = nodes.has(name) ? nodes.getJSONObject(name) : new JSONObject();
             o.put("status", status);
             if (latency != null) o.put("latency", (int) latency); else o.remove("latency");
             if (exitIp != null) o.put("exitIp", exitIp); else o.remove("exitIp");
             if (risk != null) o.put("riskLevel", risk); else o.remove("riskLevel");
+            if (reason != null) o.put("reason", reason); else o.remove("reason");
             o.put("checkedAt", System.currentTimeMillis());
             nodes.put(name, o);
             return nodeJson(name, o); // 供进度回调实时推给前端
@@ -95,6 +102,7 @@ public class NodeRepo {
                 j.put("name", name);
                 j.put("type", o.optString("type"));
                 j.put("status", o.optString("status", "unknown"));
+                if (o.has("reason")) j.put("reason", o.getString("reason"));
                 if (o.has("latency")) j.put("latency", o.getInt("latency"));
                 if (o.has("exitIp")) j.put("exitIp", o.getString("exitIp"));
                 if (o.has("riskLevel")) j.put("riskLevel", o.getString("riskLevel"));

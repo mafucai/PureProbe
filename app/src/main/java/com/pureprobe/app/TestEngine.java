@@ -81,16 +81,17 @@ public class TestEngine {
 
     public void shutdown() { stop(); }
 
-    /** 漏斗判定：每节点状态机。返回该节点结果 JSON（供进度回调实时推前端） */
+    /** 漏斗判定：每节点状态机。返回该节点结果 JSON（供进度回调实时推前端）。
+     *  reason 字段：区分失败原因（REALITY认证失败/DNS污染/UDP阻断/超时），不一律"不通" */
     private JSONObject probeNode(String name, int timeoutSec) {
         if (!api.select("PROBE", name)) {
-            return nodeRepo.setResult(name, "dead", null, null, null);
+            return nodeRepo.setResult(name, "dead", null, null, null, "select失败");
         }
         if (!http.expect(LIVENESS_URL, 204, timeoutSec)) {
-            return nodeRepo.setResult(name, "dead", null, null, null);
+            return nodeRepo.setResult(name, "dead", null, null, null, "探活超时");
         }
         if (!http.expect(POLLUTION_URL, 204, timeoutSec)) {
-            return nodeRepo.setResult(name, "polluted", null, null, null);
+            return nodeRepo.setResult(name, "polluted", null, null, null, "DNS污染");
         }
         // L3: 出口 IP 风险（ip-api 免费版 45/min，简单节流）
         try { Thread.sleep(1400); } catch (InterruptedException ignored) {}

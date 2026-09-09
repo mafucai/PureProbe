@@ -53,11 +53,12 @@
     nodeRow: function (n, rank) {
       var lat = n.latency != null ? n.latency + 'ms' : '—';
       var ip = n.exitIp || '—';
+      var reason = n.reason ? ' · ' + esc(n.reason) : '';
       var rankStr = rank != null ? '<span class="rank">' + rank + '</span>' : '';
       return '<div class="node-row ' + STATUS_CLASS[n.status || 'unknown'] + '">' +
         rankStr +
         '<div class="node-main"><b>' + esc(n.name) + '</b>' +
-        '<span class="hint">' + esc(n.type || '') + ' · ' + esc(ip) + ' · ' + lat + '</span></div>' +
+        '<span class="hint">' + esc(n.type || '') + ' · ' + esc(ip) + ' · ' + lat + reason + '</span></div>' +
         '<span class="node-status">' + (STATUS_LABEL[n.status || 'unknown']) + '</span>' +
         '</div>';
     },

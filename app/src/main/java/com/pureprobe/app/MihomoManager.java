@@ -28,7 +28,9 @@ public class MihomoManager {
     public int getApiPort() { return apiPort; }
     public String getApiBase() { return "http://127.0.0.1:" + apiPort; }
 
-    /** 生成最小内核配置（provider 吃订阅），写入 filesDir/mihomo.yaml */
+    /** 生成最小内核配置（provider 吃订阅），写入 filesDir/mihomo.yaml
+     *  mode:rule + MATCH,PROBE：确保混合端口流量真实走 PROBE 组（bug#14 主修复，
+     *  旧 mode:global 下 GLOBAL=DIRECT，select 全是空操作——本机内核实测铁证） */
     public File writeConfig(String subUrl) throws IOException {
         File dir = new File(ctx.getFilesDir(), "mihomo");
         if (!dir.exists()) dir.mkdirs();
@@ -36,10 +38,12 @@ public class MihomoManager {
         String yaml = "mixed-port: " + socksPort + "\n"
                 + "bind-address: 127.0.0.1\n"
                 + "allow-lan: false\n"
-                + "mode: global\n"
+                + "mode: rule\n"
                 + "log-level: warning\n"
                 + "external-controller: 127.0.0.1:" + apiPort + "\n"
                 + "secret: \"" + apiSecret + "\"\n"
+                + "rules:\n"
+                + "  - MATCH,PROBE\n"
                 + "proxies: []\n"
                 + "proxy-groups:\n"
                 + "  - name: PROBE\n"
