@@ -31,6 +31,7 @@
 
 | 失败 | 根因 | 应对 |
 |---|---|---|
-| Run#34205728574 (build-3) 成功交付但真机报"内核二进制缺失" | APK 里有 libmihomo.so，但 AGP 8 默认 `extractNativeLibs=false`，安装时 .so 不解压到 nativeLibraryDir，exec 找不到文件 | `packagingOptions.jniLibs.useLegacyPackaging = true` 强制解压（v0.1.1, versionCode 2）。教训：手工塞 jniLibs 的独立 .so 必须显式开 legacy packaging |
+| Run#3 (build-7) v0.1.3 真机仍"按钮全死" + JS 报 "[object Object] is not valid JSON" | 双根因：① refreshSubscription 的 synchronized 跨 20s 网络等待持锁，桥线程全堵；② evaluateJavascript 拼接 JSON 无引号包裹，eval 语义歧义 | ① 网络等待零持锁（SubscriptionRepo）+ refreshing 防重入；② Java 侧 quote() 转义成 JS 字符串字面量 + JS norm() 统一 parse。教训：Android 桥回调必须引号包裹；锁永不跨网络 |
+| Proot 环境重置 /workspace 全清 | 手机环境维护重置 | 代码全在 GitHub 零损失；SSH key/gh token 丢失→重装 gh + 设备码认证；测试脚本重写 v2 |
 | Run#34204801806 下载内核 404 | mihomo android 资产名是 `mihomo-android-arm64-v8-版本.gz`（多了 -v8），按猜的 `arm64` 写 URL 404 | 下载前先查 release 真实资产名（API），workflow 已修正 |
 | Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |

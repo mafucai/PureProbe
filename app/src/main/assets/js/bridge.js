@@ -35,15 +35,20 @@ window.PureBridge = {
   onSubReady: function (cb) { this._subReadyCb = cb; }
 };
 
-window.onPureProgress = function (json) {
-  try { PureBridge._progressCb && PureBridge._progressCb(JSON.parse(json)); }
+window.onPureProgress = function (jsonOrObj) {
+  try { PureBridge._progressCb && PureBridge._progressCb(norm(jsonOrObj)); }
   catch (e) { __dbg('onPureProgress: ' + e.message, true); }
 };
-window.onPureTestDone = function (json) {
-  try { PureBridge._doneCb && PureBridge._doneCb(JSON.parse(json)); }
+window.onPureTestDone = function (jsonOrObj) {
+  try { PureBridge._doneCb && PureBridge._doneCb(norm(jsonOrObj)); }
   catch (e) { __dbg('onPureTestDone: ' + e.message, true); }
 };
-window.onPureSubReady = function (json) {
-  try { PureBridge._subReadyCb && PureBridge._subReadyCb(JSON.parse(json)); }
+window.onPureSubReady = function (jsonOrObj) {
+  try { PureBridge._subReadyCb && PureBridge._subReadyCb(norm(jsonOrObj)); }
   catch (e) { __dbg('onPureSubReady: ' + e.message, true); }
 };
+// evaluateJavascript 传来的可能是对象也可能是 JSON 字符串（历史路径不一致），统一兼容
+function norm(v) {
+  if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return { ok: false, error: v }; } }
+  return v;
+}
