@@ -36,3 +36,4 @@
 | build-10 (v0.2.1) 真机"订阅拉取失败 provider文件大小=517996" | **订阅实际下载成功**；Java 读内核 API 用 `http://127.0.0.1` 被 Android 明文策略拦截（连回环也拦） | network_security_config 白名单 127.0.0.1/localhost/ip-api.com（v0.2.2）。教训：targetSdk 高于 23 默认禁明文，回环 HTTP 也要白名单 |
 | Run#34204801806 下载内核 404 | mihomo android 资产名是 `mihomo-android-arm64-v8-版本.gz`（多了 -v8），按猜的 `arm64` 写 URL 404 | 下载前先查 release 真实资产名（API），workflow 已修正 |
 | Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |
+| build-13 (v0.2.4) 真机"全部不通"但用户代理正常可用 | **Java SOCKS 代理在本地解析 DNS**（gstatic 被污染解析成假 IP→直连失败→全标 dead）；且全 dead 结果被增量缓存→之后"无待测节点"永远测不了（bug#15叠加） | ① 探活改走 mihomo **混合端口 HTTP CONNECT**（域名由内核远程解析，与用户翻墙行为一致，本机双204验证）；② 增量缓存只跳过 clean，dead/polluted 每轮重测（v0.2.5）。教训：Java Proxy.Type.SOCKS ≠ 远程DNS，翻墙探活必须 HTTP CONNECT |

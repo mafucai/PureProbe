@@ -13,8 +13,8 @@
     var cutoff = cacheHours * 3600 * 1000;
     return PureState.nodes.filter(function (n) {
       if (!incremental) return true;
-      // 增量：缓存内已测且未过期的跳过
-      if (n.status && n.status !== 'unknown' && n.checkedAt && (now - n.checkedAt) < cutoff) return false;
+      // 干净节点才享受缓存跳过；不通/污染节点每轮都重测（bug#15：全dead缓存导致永远测不了）
+      if (n.status === 'clean' && n.checkedAt && (now - n.checkedAt) < cutoff) return false;
       return true;
     }).map(function (n) { return n.name; });
   }

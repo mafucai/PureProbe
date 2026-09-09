@@ -26,11 +26,13 @@ public class ProbeHttpClient {
         return get(url, timeoutSec) == expectCode;
     }
 
-    /** GET 经 socks，返回 HTTP code；-1 = 异常 */
+    /** GET 经 mihomo 混合端口，返回 HTTP code；-1 = 异常。
+     *  必须走 HTTP CONNECT 而非 SOCKS：Java SOCKS 代理在本地解析 DNS（会被污染），
+     *  HTTP 代理把域名交给内核远程解析——与用户正常翻墙行为一致（bug#16） */
     public int get(String url, int timeoutSec) {
         long t0 = System.currentTimeMillis();
         try {
-            Proxy p = new Proxy(Proxy.Type.SOCKS,
+            Proxy p = new Proxy(Proxy.Type.HTTP,
                     new InetSocketAddress("127.0.0.1", mgr.getSocksPort()));
             HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection(p);
             c.setConnectTimeout(timeoutSec * 1000);
@@ -53,11 +55,11 @@ public class ProbeHttpClient {
         }
     }
 
-    /** GET 并返回 JSON 体（经 socks） */
+    /** GET 并返回 JSON 体（经 mihomo 混合端口 HTTP CONNECT，域名由内核远程解析） */
     public JSONObject getJson(String url, int timeoutSec) {
         final long t0 = System.currentTimeMillis();
         try {
-            Proxy p = new Proxy(Proxy.Type.SOCKS,
+            Proxy p = new Proxy(Proxy.Type.HTTP,
                     new InetSocketAddress("127.0.0.1", mgr.getSocksPort()));
             HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection(p);
             c.setConnectTimeout(timeoutSec * 1000);
