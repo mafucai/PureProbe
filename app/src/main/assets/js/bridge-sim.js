@@ -31,8 +31,8 @@
         subs.push(sub);
         resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
       }
-      // 与真机异步路径一致：走 onPureSubReady 回调
-      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      // 与真机异步路径一致：走 onPureSubReady 回调（传对象，norm() 兼容两条路径）
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(resp); }, 100);
       return JSON.stringify({ ok: true, async: true });
     },
     removeSubscription: function (id) {
@@ -42,7 +42,7 @@
     },
     refreshSubscription: function (id) {
       var resp = { ok: true, count: SIM_NODES.length, nodes: SIM_NODES };
-      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(JSON.stringify(resp)); }, 100);
+      setTimeout(function () { window.onPureSubReady && window.onPureSubReady(resp); }, 100);
       return JSON.stringify({ ok: true, async: true });
     },
     getNodes: function () {

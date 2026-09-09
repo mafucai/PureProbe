@@ -32,7 +32,7 @@
 | 失败 | 根因 | 应对 |
 |---|---|---|
 | Run#3 (build-7) v0.1.3 真机仍"按钮全死" + JS 报 "[object Object] is not valid JSON" | 双根因：① refreshSubscription 的 synchronized 跨 20s 网络等待持锁，桥线程全堵；② evaluateJavascript 拼接 JSON 无引号包裹，eval 语义歧义 | ① 网络等待零持锁（SubscriptionRepo）+ refreshing 防重入；② Java 侧 quote() 转义成 JS 字符串字面量 + JS norm() 统一 parse。教训：Android 桥回调必须引号包裹；锁永不跨网络 |
-| build-9 编译失败 | 重构残留 `SubStore` 引用（MihomoManager）+ ProbeHttpClient.getJson 局部变量 t0 漏声明 | 全局 grep 检查已删类引用；javac 缺失环境下重构必须跑引用扫描 |
+| build-11 (v0.2.2) 真机"体检完成但已测0" | 双根因（本机起真内核复现铁证）：① 内核配置 PROBE 组只含 AUTOPOOL，`select(provider节点)` 全 400 "proxy not exist" → 全标 dead；② 前端 onDone 不重拉数据，进度不带结果 → UI 永远"未测" | ① PROBE 组直接 `use:[sub]` 吃 provider 全部节点（本机验证 select 204 成功）；② 进度回调实时带单节点结果 + onDone 重拉全量（v0.2.3）。教训：内核 API 行为必须本机起真内核验证，不能靠猜 |
 | build-10 (v0.2.1) 真机"订阅拉取失败 provider文件大小=517996" | **订阅实际下载成功**；Java 读内核 API 用 `http://127.0.0.1` 被 Android 明文策略拦截（连回环也拦） | network_security_config 白名单 127.0.0.1/localhost/ip-api.com（v0.2.2）。教训：targetSdk 高于 23 默认禁明文，回环 HTTP 也要白名单 |
 | Run#34204801806 下载内核 404 | mihomo android 资产名是 `mihomo-android-arm64-v8-版本.gz`（多了 -v8），按猜的 `arm64` 写 URL 404 | 下载前先查 release 真实资产名（API），workflow 已修正 |
 | Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |

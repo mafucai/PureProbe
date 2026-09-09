@@ -49,9 +49,9 @@ public class TestEngine {
                     public void run() {
                         if (stopFlag) return;
                         try { Thread.sleep((long) (Math.random() * 300)); } catch (InterruptedException ignored) {}
-                        probeNode(name, timeoutSec);
+                        JSONObject nodeResult = probeNode(name, timeoutSec);
                         int d = done.incrementAndGet();
-                        if (progressCb != null) progressCb.on(d, total, name);
+                        if (progressCb != null) progressCb.on(d, total, name, nodeResult);
                     }
                 });
             }
@@ -81,37 +81,32 @@ public class TestEngine {
 
     public void shutdown() { stop(); }
 
-    /** 漏斗判定：每节点状态机 */
-    private void probeNode(String name, int timeoutSec) {
+    /** 漏斗判定：每节点状态机。返回该节点结果 JSON（供进度回调实时推前端） */
+    private JSONObject probeNode(String name, int timeoutSec) {
         if (!api.select("PROBE", name)) {
-            nodeRepo.setResult(name, "dead", null, null, null);
-            return;
+            return nodeRepo.setResult(name, "dead", null, null, null);
         }
         if (!http.expect(LIVENESS_URL, 204, timeoutSec)) {
-            nodeRepo.setResult(name, "dead", null, null, null);
-            return;
+            return nodeRepo.setResult(name, "dead", null, null, null);
         }
         if (!http.expect(POLLUTION_URL, 204, timeoutSec)) {
-            nodeRepo.setResult(name, "polluted", null, null, null);
-            return;
+            return nodeRepo.setResult(name, "polluted", null, null, null);
         }
         // L3: 出口 IP 风险（ip-api 免费版 45/min，简单节流）
         try { Thread.sleep(1400); } catch (InterruptedException ignored) {}
         JSONObject info = http.getJson(IP_INFO_URL, 6);
         if (info == null) {
-            nodeRepo.setResult(name, "clean", http.lastLatency(), null, null);
-            return;
+            return nodeRepo.setResult(name, "clean", http.lastLatency(), null, null);
         }
         boolean proxy = info.optBoolean("proxy", false);
         boolean hosting = info.optBoolean("hosting", false);
         String exitIp = info.optString("query", null);
         if (proxy || hosting) {
-            nodeRepo.setResult(name, "risky", http.lastLatency(), exitIp, "high");
-        } else {
-            nodeRepo.setResult(name, "clean", http.lastLatency(), exitIp, "low");
+            return nodeRepo.setResult(name, "risky", http.lastLatency(), exitIp, "high");
         }
+        return nodeRepo.setResult(name, "clean", http.lastLatency(), exitIp, "low");
     }
 
-    public interface ProgressCb { void on(int tested, int total, String current); }
+    public interface ProgressCb { void on(int tested, int total, String current, org.json.JSONObject nodeResult); }
     public interface DoneCb { void on(int tested); }
 }

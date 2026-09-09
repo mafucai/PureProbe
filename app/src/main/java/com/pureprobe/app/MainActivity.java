@@ -144,12 +144,13 @@ public class MainActivity extends Activity {
                 public void run() {
                     String result = engine.start(nodeNamesJson, concurrency, timeoutSec,
                             new TestEngine.ProgressCb() {
-                                public void on(int tested, int total, String current) {
+                                public void on(int tested, int total, String current, org.json.JSONObject nodeResult) {
                                     try {
                                         JSONObject p = new JSONObject();
                                         p.put("tested", tested);
                                         p.put("total", total);
                                         p.put("current", current);
+                                        if (nodeResult != null) p.put("node", nodeResult);
                                         onProgressJson(p.toString());
                                     } catch (Exception ignored) {}
                                 }

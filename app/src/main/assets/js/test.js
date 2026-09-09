@@ -38,13 +38,34 @@
       log('开始体检 ' + names.length + ' 个节点，并发 ' + PureState.settings.concurrency);
       PureBridge.onProgress(function (p) {
         PureState.progress = p;
+        // 实时合并单节点结果（进度回调带 node 字段）
+        if (p.node && p.node.name) {
+          var old = PureState.nodeByName(p.node.name);
+          if (old) {
+            old.status = p.node.status;
+            old.latency = p.node.latency != null ? p.node.latency : null;
+            old.exitIp = p.node.exitIp || null;
+            old.riskLevel = p.node.riskLevel || null;
+            old.checkedAt = p.node.checkedAt || Date.now();
+          } else {
+            PureState.nodes.push(p.node);
+          }
+        }
         PureRender.renderProgress();
+        PureRender.renderStats();
       });
       PureBridge.onDone(function (r) {
         PureState.testing = false;
         PureState.save();
-        PureRender.renderAll();
-        log(r.ok ? ('体检完成，共测 ' + r.tested + ' 个') : ('体检失败: ' + (r.error || '未知')));
+        // 完成后从原生重拉全量结果（防止漏合并），失败也刷
+        PureBridge.getNodes().then(function (nodes) {
+          if (nodes && nodes.length) PureState.nodes = nodes;
+          PureRender.renderAll();
+          log(r.ok ? ('体检完成，共测 ' + r.tested + ' 个') : ('体检失败: ' + (r.error || '未知')));
+        }).catch(function () {
+          PureRender.renderAll();
+          log(r.ok ? ('体检完成，共测 ' + r.tested + ' 个') : ('体检失败: ' + (r.error || '未知')));
+        });
       });
       PureBridge.startTest(names, PureState.settings.concurrency, PureState.settings.timeoutSec, PureState.settings.incremental)
         .catch(function (e) {

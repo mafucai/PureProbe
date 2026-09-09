@@ -54,7 +54,7 @@ public class NodeRepo {
         } catch (Exception ignored) {}
     }
 
-    public synchronized void setResult(String name, String status, Integer latency, String exitIp, String risk) {
+    public synchronized JSONArray setResult(String name, String status, Integer latency, String exitIp, String risk) {
         try {
             JSONObject o = nodes.has(name) ? nodes.getJSONObject(name) : new JSONObject();
             o.put("status", status);
@@ -63,7 +63,25 @@ public class NodeRepo {
             if (risk != null) o.put("riskLevel", risk); else o.remove("riskLevel");
             o.put("checkedAt", System.currentTimeMillis());
             nodes.put(name, o);
+            return nodeJson(name, o); // 供进度回调实时推给前端
         } catch (Exception ignored) {}
+        return null;
+    }
+
+    private JSONObject nodeJson(String name, JSONObject o) {
+        try {
+            JSONObject j = new JSONObject();
+            j.put("name", name);
+            j.put("type", o.optString("type"));
+            j.put("status", o.optString("status", "unknown"));
+            if (o.has("latency")) j.put("latency", o.getInt("latency"));
+            if (o.has("exitIp")) j.put("exitIp", o.getString("exitIp"));
+            if (o.has("riskLevel")) j.put("riskLevel", o.getString("riskLevel"));
+            if (o.has("checkedAt")) j.put("checkedAt", o.getLong("checkedAt"));
+            return j;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public synchronized JSONArray toJsList() {
