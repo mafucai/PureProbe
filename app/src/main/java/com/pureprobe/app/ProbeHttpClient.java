@@ -55,6 +55,7 @@ public class ProbeHttpClient {
 
     /** GET 并返回 JSON 体（经 socks） */
     public JSONObject getJson(String url, int timeoutSec) {
+        final long t0 = System.currentTimeMillis();
         try {
             Proxy p = new Proxy(Proxy.Type.SOCKS,
                     new InetSocketAddress("127.0.0.1", mgr.getSocksPort()));

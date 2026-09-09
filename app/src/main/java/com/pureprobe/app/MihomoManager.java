@@ -81,7 +81,7 @@ public class MihomoManager {
         if (!f.canExecute() && !f.setExecutable(true, false)) {
             throw new IOException("内核无执行权限");
         }
-        File cfg = writeConfig(SubStore.ensureMetaFlag(subUrl));
+        File cfg = writeConfig(SubscriptionRepo.ensureMetaFlag(subUrl));
         ProcessBuilder pb = new ProcessBuilder(bin, "-d", cfg.getParent(), "-f", cfg.getAbsolutePath());
         pb.environment().put("HOME", ctx.getFilesDir().getAbsolutePath());
         pb.redirectErrorStream(true);

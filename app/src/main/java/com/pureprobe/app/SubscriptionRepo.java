@@ -153,4 +153,11 @@ public class SubscriptionRepo {
         String m = e.getMessage();
         return m == null ? "internal" : m.replaceAll("(token|key|auth)=[^&]+", "$1=***");
     }
+
+    /** 订阅 URL 补 flag=meta（mihomo 解析需要） */
+    public static String ensureMetaFlag(String url) {
+        if (url == null) return url;
+        if (url.contains("flag=")) return url;
+        return url + (url.contains("?") ? "&" : "?") + "flag=meta";
+    }
 }
