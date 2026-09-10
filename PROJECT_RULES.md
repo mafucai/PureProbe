@@ -1,6 +1,6 @@
 # PureProbe 节点体检 — 项目规则
 
-> **状态：已归档（2026-09-10），主人决定停止修复。** 最终状态/剩余嫌疑/重启指引 → `docs/DELIVERY-REPORT.md`
+> **状态：活跃（2026-09-10 v0.3.0 复活）。** 并发竞争根因已修复并真机验证成功 → `docs/DELIVERY-REPORT.md` 七、重启补遗
 > 定位：给主人个人的 Android 工具 App。输入机场订阅链接，自动逐节点体检（死活 → 污染 → 出口 IP 纯净度），产出"干净节点"排行榜和可导出的排除名单。
 > 仓库：github.com/mafucai/PureProbe · 编译：仅 GitHub Actions 云端，本地零 Android SDK。
 
@@ -39,3 +39,4 @@
 | Run#34205166907 编译失败 | ① `Process.pid()` 是 Java 9 API，Android Process 类没有；② SubStore 漏 import InputStream | ① 改用 `proc.destroy()+waitFor(3s)+destroyForcibly()`；② 补 import。教训：本地无 javac，写 Android 代码避免 Java 9+ Process API |
 | build-13 (v0.2.4) 真机"全部不通"但用户代理正常可用 | **Java SOCKS 代理在本地解析 DNS**（gstatic 被污染解析成假 IP→直连失败→全标 dead）；且全 dead 结果被增量缓存→之后"无待测节点"永远测不了（bug#15叠加） | ① 探活改走 mihomo **混合端口 HTTP CONNECT**（域名由内核远程解析，与用户翻墙行为一致，本机双204验证）；② 增量缓存只跳过 clean，dead/polluted 每轮重测（v0.2.5）。教训：Java Proxy.Type.SOCKS ≠ 远程DNS，翻墙探活必须 HTTP CONNECT |
 | build-14 (v0.2.5) 真机仍全dead | **mode:global 下 GLOBAL.now=DIRECT，流量不走 PROBE 组，select 全是空操作**（真内核复现铁证：切节点出口 IP 恒不变） | 配置改 mode:rule + MATCH,PROBE（本机实测：select 后出口真实切换 Singapore）。另：REALITY 节点 authentication failed 为节点侧/兼容问题（指纹 ios/chrome/无 三种均失败），hy2 为沙盒 UDP 阻断（真机待验）→ v0.2.6 加 reason 诊断字段 |
+| build-15 (v0.2.6) 真机 72/72 全判死（归档主因，2026-09-10 重启破案） | **select 是全局状态，与并发探活互相踩踏**：并发 8-16 时"切到 B 的瞬间 A 的请求还在飞"，所有在途请求测的是最后选中节点/连接竞争态 → 大量超时(000) → 全判死。本机机械取证铁证：同一内核同订阅，串行 10/10 全 204 vs 并发 8 仅 8/20 | **两阶段漏斗（v0.3.0）**：L1 用内核组测 API `GET /group/PROBE/delay`（一次调用测全组 72 节点 5.1s，内核自己并发，天然安全）；L2/L3 仅对存活节点（72→27）串行 select+探活。TestEngine 重构 + MihomoApiClient.groupDelay，真机验证成功。教训：①mihomo 全局 select 不可与探活并发，测节点用组测 API；②探活 catch 块禁止静默吞异常（吞了日志=自废侦察，本案当初无法定位的直接原因）；③归档疑案重启=沙盒起真内核+真数据+App精确配置做 A/B 对照 |
