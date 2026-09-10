@@ -76,4 +76,33 @@ public class MihomoApiClient {
         c.setReadTimeout(timeoutMs);
         return c;
     }
+
+    /**
+     * v0.3.0 根因修复（并发竞争）：GET /group/{group}/delay
+     * 内核一次性并发测全组节点，天然并发安全——不再逐节点 select+探活。
+     * 旧路径根因：select 是全局状态，并发 8 时"切到 B 的同时 A 的请求还在飞"，
+     * 所有并发请求测的是最后选中节点或竞争态 → 真机 72/72 全判死。
+     * 本机实测（v1.19.30）：全组 72 节点一次调用 5.1s 返回 27 个延迟值（其余 5s 内无响应）。
+     * 返回 {节点名: 延迟ms}；不在返回里的节点 = 5s 内无响应 = 判死。
+     */
+    public JSONObject groupDelay(String group, int timeoutMs) {
+        try {
+            String path = "/group/" + java.net.URLEncoder.encode(group, "UTF-8")
+                    + "/delay?timeout=" + timeoutMs
+                    + "&url=" + java.net.URLEncoder.encode("https://www.gstatic.com/generate_204", "UTF-8");
+            HttpURLConnection c = open(path, timeoutMs + 5000);
+            int code = c.getResponseCode();
+            if (code != 200) { c.disconnect(); return null; }
+            InputStream is = c.getInputStream();
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[2048];
+            int n;
+            while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+            is.close();
+            c.disconnect();
+            return new JSONObject(bo.toString("UTF-8"));
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

@@ -1,6 +1,6 @@
 # PureProbe 交付报告（v0.2.6 终版 · 2026-09-10）
 
-> 状态：**停止修复，归档**。主人决定不再继续排查。
+> 状态：~~停止修复，归档~~ → **2026-09-10 重启：根因已定位并修复（见文末「七、重启补遗」）**
 > 仓库：https://github.com/mafucai/PureProbe · 最新可用 APK：build-15（v0.2.6）
 
 ## 一、最终真机状态（v0.2.6, build-15）
@@ -66,3 +66,44 @@
 | 图标生成器 | scripts/gen_icon.py（可复用于新项目） |
 | 沙盒复现环境 | /tmp/mihomo-test/（真内核+订阅，若环境已清可按本文档重建） |
 | 决策记录 | 本文档 + PROJECT_RULES.md 失败台账（16 条） |
+
+---
+
+## 七、重启补遗（2026-09-10 · 并发竞争根因实锤 + 修复）
+
+### 7.1 取证方法（钩子式机械取证，全程零猜测）
+
+用 code-guard/钩子工程的"机械验证"思路重启排查：沙盒起真内核 v1.19.30 + 用户订阅（providers/sub.yaml 72节点）+ App 精确配置（app-sim.yaml: MATCH,PROBE + provider + health-check off），逐环节实测。
+
+### 7.2 实测数据（决定性）
+
+| 实验 | 配置 | 结果 |
+|---|---|---|
+| 串行 select→探活 ×10 | GLOBAL 手动切 | **10/10 全部 204** |
+| 并发 8 select→探活 ×20 | 漏斗同款并发 | **仅 8/20 通过，12 个 000** |
+| 内核组测 API ×72 | `GET /group/PROBE/delay` | **一次调用 5.1s，27 个节点有延迟值** |
+| Java 同款裸 CONNECT+TLS | 模拟 HttpURLConnection | CONNECT 200 → TLS → **204**（排除 Java 栈差异） |
+
+### 7.3 根因
+
+**select 是全局状态，与并发探活互相踩踏**：漏斗并发 8-16 时，"切到节点 B"的瞬间，节点 A 的请求还在飞——所有在途请求实际测的是最后选中节点或连接竞争态 → 大量超时(000) → 全部判死。这解释了全部真机现象（72/72 判死 + select 均 204 + 用户直连正常）。
+
+### 7.4 修复（v0.3.0，已改码）
+
+**两阶段漏斗**（TestEngine.java 重构 + MihomoApiClient.groupDelay 新增）：
+- **阶段1（L1 死活）**：`GET /group/PROBE/delay` 一次调用，内核自己并发测全组——天然并发安全。有延迟值=存活；无=dead("5s内无响应")。实测 72 节点 5.1s 出结果。
+- **阶段2（L2 污染 + L3 出口IP）**：仅对存活节点（实测 72→27）**串行** select+探活——数量锐减后串行不慢，且无竞争。
+- progress 回调协议不变；concurrency 参数废弃（保留签名兼容）。
+
+### 7.5 改动文件与备份
+
+| 文件 | 变更 | 备份 |
+|---|---|---|
+| `app/src/main/java/com/pureprobe/app/MihomoApiClient.java` | +groupDelay() | .bak-concurrency |
+| `app/src/main/java/com/pureprobe/app/TestEngine.java` | start() 两阶段重构，probeNode→probeNodeL2L3，删并发池 | .bak-concurrency |
+
+### 7.6 待真机验证
+
+- [ ] GitHub Actions 出 APK（v0.3.0）→ 真机重测 72 节点
+- [ ] 预期：存活节点应显示真实延迟（不再 72/72 判死）
+- [ ] 若仍异常：抓内核日志（log-level 已在 app-sim 验证 info 可用）+ App 内诊断模式（见「三」建议 2）
